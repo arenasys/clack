@@ -65,6 +65,7 @@ export interface Channel {
   position: number;
   parent: Snowflake;
   overwrites: Overwrite[];
+  parentName?: string;
 }
 
 export const enum OverwriteType {
@@ -79,7 +80,7 @@ export interface Overwrite {
   deny: number;
 }
 
-export const enum FileType {
+export const enum AttachmentType {
   File = 0,
   Image = 1,
   Video = 2,
@@ -90,7 +91,7 @@ export const enum FileType {
 export interface Attachment {
   id: Snowflake;
   filename: string;
-  type: FileType;
+  type: AttachmentType;
   mimetype: string;
   size: number;
   preload: string;
@@ -106,7 +107,7 @@ export interface Attachment {
 
 export interface Viewable {
   id: Snowflake;
-  type: FileType;
+  type: AttachmentType;
   width: number;
   height: number;
 
@@ -127,7 +128,7 @@ export interface EmbedMedia {
   preload: string;
 
   // Client
-  type?: FileType;
+  type?: AttachmentType;
   previewURL?: string;
   displayURL?: string;
   proxyURL?: string;
@@ -180,7 +181,7 @@ export interface Embed {
 }
 
 export interface Emoji {
-  id: Snowflake;
+  id?: Snowflake;
   name: string;
 }
 

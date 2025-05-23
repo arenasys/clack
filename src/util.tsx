@@ -1,8 +1,19 @@
 import { format, isToday, isYesterday } from "date-fns";
-
+import Rand from "rand-seed";
 import { sha256 } from "js-sha256";
 import Cookies from "universal-cookie";
-import { FileType } from "./models";
+import { AttachmentType } from "./models";
+
+import {
+  FaFile,
+  FaFileImage,
+  FaFileVideo,
+  FaFileAudio,
+  FaFileAlt,
+  FaFileCode,
+  FaFileArchive,
+  FaFilePdf,
+} from "react-icons/fa";
 
 export function BinarySearch(
   length: number,
@@ -24,6 +35,34 @@ export function BinarySearch(
   return null;
 }
 
+export function StringSearchScore(
+  needle: string,
+  haystack: string,
+  divider: string | undefined = undefined
+) {
+  if (needle.length == 0) return 0.0;
+  if (haystack.length == 0) return 0.0;
+  var score = 0;
+  const i = haystack.indexOf(needle);
+  if (i >= 0) {
+    score += needle.length / haystack.length;
+    score += 1 - i / haystack.length;
+
+    const next = haystack[i + needle.length];
+    const prev = haystack[i - 1];
+    if (next === undefined || next === divider) {
+      score += 1.0;
+    }
+    if (prev === undefined || prev === divider) {
+      score += 1.0;
+    }
+    if (haystack.length == needle.length) {
+      score += 100.0;
+    }
+  }
+  return score;
+}
+
 export function FormatDateTime(date: Date) {
   if (isToday(date)) {
     return `Today at ${format(date, "h:mm a")}`;
@@ -38,9 +77,31 @@ export function FormatTime(date: Date) {
   return format(date, "h:mm a");
 }
 
-export function FormatColor(color: number | undefined) {
+export function FormatBytes(bytes?: number) {
+  const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
+
+  if (bytes == undefined) return "??";
+
+  var size = bytes;
+  for (var i = 0; i < sizes.length; i++) {
+    if (size < 1024 || i == sizes.length - 1) {
+      return `${parseFloat(size.toFixed(2))} ${sizes[i]}`;
+    }
+    size /= 1024;
+  }
+
+  return `??`;
+}
+
+export function FormatColor(color: number | undefined, alpha: number = 1.0) {
   if (color == undefined) return undefined;
-  return `#${color.toString(16).padStart(6, "0")}`;
+  var result = `#${color.toString(16).padStart(6, "0")}`;
+  if (alpha != 1.0) {
+    result += Math.floor(alpha * 255)
+      .toString(16)
+      .padStart(2, "0");
+  }
+  return result;
 }
 
 const cookies = new Cookies(null, { path: "/" });
@@ -69,7 +130,7 @@ export async function SHA256(text: string): Promise<string> {
 
 var snowflakeCounter = 0;
 
-export function makeSnowflake() {
+export function MakeSnowflake() {
   const EPOCH = 1288834974657;
 
   const TIMESTAMP = BigInt(Date.now() - EPOCH) << 22n;
@@ -80,7 +141,7 @@ export function makeSnowflake() {
   return (TIMESTAMP | MACHINE | COUNTER).toString();
 }
 
-export function chooseFiles(): Promise<File[]> {
+export function ChooseFiles(): Promise<File[]> {
   return new Promise((resolve, reject) => {
     const input = document.createElement("input");
     input.type = "file";
@@ -99,21 +160,39 @@ export function chooseFiles(): Promise<File[]> {
   });
 }
 
-export function getFileType(file: File): FileType {
+export function GetFileType(file: File): AttachmentType {
   if (file.type.startsWith("image/")) {
-    return FileType.Image;
+    return AttachmentType.Image;
   } else if (file.type.startsWith("video/")) {
-    return FileType.Video;
+    return AttachmentType.Video;
   } else if (file.type.startsWith("audio/")) {
-    return FileType.Audio;
+    return AttachmentType.Audio;
   } else if (file.type.startsWith("text/")) {
-    return FileType.Text;
+    return AttachmentType.Text;
   } else {
-    return FileType.File;
+    return AttachmentType.File;
   }
 }
 
-export function getTooltipPosition(
+export function GetFileIcon(name: string, type: AttachmentType) {
+  if (type === AttachmentType.Image) {
+    return <FaFileImage />;
+  } else if (type === AttachmentType.Video) {
+    return <FaFileVideo />;
+  } else if (type === AttachmentType.Audio) {
+    return <FaFileAudio />;
+  } else if (name.endsWith(".zip") || name.endsWith(".gz")) {
+    return <FaFileArchive />;
+  } else if (name.endsWith(".pdf")) {
+    return <FaFilePdf />;
+  } else if (name.endsWith(".txt")) {
+    return <FaFileAlt />;
+  } else {
+    return <FaFile />;
+  }
+}
+
+export function GetTooltipPosition(
   rect: DOMRect,
   dir: "top" | "bottom" | "left" | "right"
 ) {
@@ -142,4 +221,10 @@ export function getTooltipPosition(
     x: rect.left + rect.width / 2,
     y: rect.top + rect.height / 2,
   };
+}
+
+const rollRand = new Rand();
+
+export function Roll(min: number, max: number, gen: Rand = rollRand) {
+  return Math.floor(gen.next() * (max - min)) + min;
 }

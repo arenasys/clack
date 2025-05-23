@@ -187,7 +187,7 @@ export function UserEntry({ id, idx }: { id: string; idx: number }) {
             x: rect.left - 16,
             y: rect.top,
           },
-          direction: "right",
+          direction: "left",
         });
       }}
     >

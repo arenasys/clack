@@ -7,7 +7,6 @@ import {
   PiCornersInBold,
 } from "react-icons/pi";
 import { MdVolumeUp, MdVolumeDown, MdVolumeOff } from "react-icons/md";
-import _ from "underscore";
 
 import { useChatState } from "../state";
 
@@ -489,6 +488,7 @@ export function VideoDisplay({
         }
       }}
     >
+      {!isLoaded && <img src={preload} />}
       {
         <img
           src={poster}
@@ -497,7 +497,6 @@ export function VideoDisplay({
           }}
         />
       }
-      {!isLoaded && <img src={preload} />}
       {isLoaded && (
         <>
           <video

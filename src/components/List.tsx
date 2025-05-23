@@ -14,6 +14,7 @@ interface anchorState {
   scrollPositions: { top: number | null; bottom: number | null }[];
 
   lastScrollHeight: number;
+  lastOuterHeight: number;
   lastMutation: number;
 
   anchorOffset: number;
@@ -73,6 +74,20 @@ function scrollMutation(state: anchorState) {
   if (scrollHeight != state.lastScrollHeight) {
     state.lastMutation = Date.now();
     state.lastScrollHeight = scrollHeight;
+    fixScroll(state, scrollEl);
+    state.scrollPositionsStale = true;
+  }
+}
+
+function outerMutation(state: anchorState, ref: HTMLDivElement) {
+  const scrollEl = document.getElementById(state.id);
+  if (!scrollEl) return;
+
+  const outerHeight = ref.clientHeight;
+  if (outerHeight != state.lastOuterHeight) {
+    console.log("OUTER HEIGHT", outerHeight, state.lastOuterHeight);
+    state.lastMutation = Date.now();
+    state.lastOuterHeight = outerHeight;
     fixScroll(state, scrollEl);
     state.scrollPositionsStale = true;
   }
@@ -186,6 +201,7 @@ export function List({
       scrollPositions: [],
 
       lastScrollHeight: 0,
+      lastOuterHeight: 0,
       lastMutation: 0,
 
       anchorOffset: -1,
@@ -207,12 +223,20 @@ export function List({
     const rObserver = new ResizeObserver(() => scrollMutation(state));
     rObserver.observe(listRef.current);
 
+    var oObserver: ResizeObserver | undefined = undefined;
+    if (outerRef.current != null) {
+      oObserver = new ResizeObserver(() => {
+        outerMutation(state, outerRef.current!);
+      });
+      oObserver.observe(outerRef.current);
+    }
+
     return () => {
-      //console.log("LIST UNOBSERVE");
       mObserver.disconnect();
       rObserver.disconnect();
+      oObserver?.disconnect();
     };
-  }, [listRef]);
+  }, [listRef, outerRef]);
 
   useEffect(() => {
     //console.log("SYNC ANCHOR", anchor);

@@ -1,24 +1,44 @@
-import { useChatState, useChatStateShallow } from "../state";
+import {
+  GetChatStateLookups,
+  useChatState,
+  useChatStateShallow,
+} from "../state";
 
 import { useEffect, useRef, useState, useMemo } from "react";
 
-import { markdownToReact } from "../markdown";
+import { GetHTML } from "../syntax";
 
-import { Attachment, FileType, Embed, EmbedType } from "../models";
+import { Attachment, AttachmentType, Embed, EmbedType } from "../models";
 
 import { VideoDisplay, ImageDisplay } from "./Media";
 
-import { FormatDateTime, FormatTime, FormatColor } from "../util";
+import { RiReplyFill, RiEmotionFill, RiMoreFill } from "react-icons/ri";
 
-import _ from "underscore";
+import { IoMdCreate } from "react-icons/io";
+
+import {
+  FormatDateTime,
+  FormatTime,
+  FormatColor,
+  Roll,
+  GetFileIcon,
+  FormatBytes,
+} from "../util";
+
+import { FaFile, FaTimes } from "react-icons/fa";
+
 import Rand from "rand-seed";
+import { IconButton } from "./Common";
 
 export function MessageEntry({ id }: { id: string }) {
-  if (id.startsWith("skeleton")) {
-    return <Skeleton id={id} />;
-  } else {
-    return <Message id={id} />;
-  }
+  const content = useMemo(() => {
+    if (id.startsWith("skeleton")) {
+      return <Skeleton id={id} />;
+    } else {
+      return <Message id={id} />;
+    }
+  }, [id]);
+  return content;
 }
 
 function Message({ id }: { id: string }) {
@@ -27,20 +47,39 @@ function Message({ id }: { id: string }) {
     const a = state.gateway.users.get(m.author);
     const p = state.gateway.pendingMessages.has(id);
     const c = state.gateway.currentMessagesIsCombined.get(id)!;
+
+    var u = false;
+    if (p) {
+      const pending = state.gateway.pendingMessages.get(id);
+      u = (pending?.attachments?.length ?? 0) > 0;
+    }
+
     //const anchor = state.gateway.getAnchor();
     return {
       ...m,
       //anchor: anchor == id,
+      user: a,
       name: a?.nickname ?? a?.username,
       color: a?.color,
       pending: p,
+      uploading: u,
       combined: c,
+      you: a?.id == state.gateway.currentUser,
     };
   });
 
   //console.log("MESSAGE", id, message);
+  const lookups = GetChatStateLookups();
 
   const setViewerModal = useChatState((state) => state.setViewerModal);
+  const setUserPopup = useChatState((state) => state.setUserPopup);
+  const setContextMenuPopup = useChatState(
+    (state) => state.setContextMenuPopup
+  );
+
+  const hasContextMenu = useChatState((state) => {
+    return state.contextMenuPopup?.messageId == id;
+  });
 
   function doView(index: number) {
     setViewerModal({
@@ -56,7 +95,8 @@ function Message({ id }: { id: string }) {
   const className =
     "message-entry" +
     (message?.combined ? " combined" : "") +
-    (message?.pending ? " pending" : ""); //+
+    (message?.pending ? " pending" : "") +
+    (hasContextMenu ? " active" : ""); //+
   //(message?.anchor ? " anchor" : "");
 
   var header = (
@@ -67,6 +107,23 @@ function Message({ id }: { id: string }) {
           className="message-name clickable-text"
           style={{
             color: color,
+          }}
+          onClick={(e) => {
+            if (message.user) {
+              var rect = e.currentTarget.getBoundingClientRect();
+              console.log("CLICK", rect);
+              setUserPopup({
+                id: message.author,
+                user: message.user,
+                position: {
+                  x: rect.right + 16,
+                  y: rect.top,
+                },
+                direction: "right",
+              });
+              e.preventDefault();
+              e.stopPropagation();
+            }
           }}
         >
           {message?.name ?? id}
@@ -123,8 +180,78 @@ function Message({ id }: { id: string }) {
   }
 
   const messageContent = useMemo(() => {
-    return markdownToReact(message?.content ?? "");
+    return GetHTML(message?.content ?? "", lookups);
   }, [message?.edited_timestamp]);
+
+  const messageActions = useMemo(() => {
+    return (
+      <div className="message-actions-container">
+        <div className="message-actions-bar">
+          {!message.you && (
+            <IconButton
+              tooltip="Reply"
+              tooltipDirection="top"
+              className="message-actions-button row"
+              onClick={() => {}}
+            >
+              <RiReplyFill />
+            </IconButton>
+          )}
+          {message.you && (
+            <IconButton
+              tooltip="Edit"
+              tooltipDirection="top"
+              className="message-actions-button row"
+              onClick={() => {}}
+            >
+              <IoMdCreate />
+            </IconButton>
+          )}
+          <IconButton
+            tooltip="Add Reaction"
+            tooltipDirection="top"
+            className="message-actions-button row"
+            onClick={() => {}}
+          >
+            <RiEmotionFill />
+          </IconButton>
+
+          <IconButton
+            tooltip="More"
+            tooltipDirection="top"
+            className={`message-actions-button row ${
+              hasContextMenu ? "active" : ""
+            }`}
+            onClick={(rect) => {
+              console.log("HERE", hasContextMenu);
+              if (hasContextMenu) {
+                setContextMenuPopup(undefined);
+              } else {
+                var flip = rect.top > window.innerHeight - 350;
+
+                setContextMenuPopup({
+                  messageId: id,
+                  direction: flip ? "right-top" : "right",
+                  position: {
+                    x: rect.right + 8,
+                    y: rect.top - 2,
+                  },
+                });
+              }
+            }}
+          >
+            <RiMoreFill />
+          </IconButton>
+        </div>
+      </div>
+    );
+  }, [hasContextMenu]);
+
+  const hasAttachments = attachmentGroups.length > 0;
+  const hasEmbeds = message.embeds ? true : false;
+  const hasUploading = message.uploading;
+
+  const hasAccessories = hasAttachments || hasEmbeds || hasUploading;
 
   return (
     <div id={id} className={className}>
@@ -133,37 +260,106 @@ function Message({ id }: { id: string }) {
         <div className="message-timestamp-inline">{FormatTime(timestamp)}</div>
       )}
       <div className="message-content">{messageContent}</div>
-      <div className="message-accessories">
-        {attachmentGroups.length > 0 && (
-          <div className="message-attachments">
-            {attachmentGroups.map((group, index) => (
-              <div
-                key={`${id}-attachment-group-${index}`}
-                className={"message-attachment-group " + group.className}
-              >
-                {group.attachments.map((attachment, index) => (
-                  <MessageAttachment
-                    attachmentIndex={message.attachments!.indexOf(attachment)}
-                    attachmentCount={message.attachments!.length}
-                    key={`${id}-attachment-${index}`}
-                    attachment={attachment}
-                    onView={() => {
-                      doView(index);
-                    }}
-                  />
-                ))}
-              </div>
-            ))}
+      <div className="message-actions">{messageActions}</div>
+
+      {hasAccessories && (
+        <div className="message-accessories">
+          {attachmentGroups.length > 0 && (
+            <div className="message-attachments">
+              {attachmentGroups.map((group, index) => (
+                <div
+                  key={`${id}-attachment-group-${index}`}
+                  className={"message-attachment-group " + group.className}
+                >
+                  {group.attachments.map((attachment, index) => (
+                    <MessageAttachment
+                      attachmentIndex={message.attachments!.indexOf(attachment)}
+                      attachmentCount={message.attachments!.length}
+                      key={`${id}-attachment-${index}`}
+                      attachment={attachment}
+                      onView={() => {
+                        doView(index);
+                      }}
+                    />
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+          {message.embeds && (
+            <div className="message-embeds">
+              {message.embeds?.map((embed, index) => (
+                <MessageEmbed key={`${id}-embed-${index}`} embed={embed} />
+              ))}
+            </div>
+          )}
+          {message.uploading && <MessageUpload id={id} />}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MessageUpload({ id }: { id: string }) {
+  const cancel = useChatState((state) => state.cancelMessage);
+
+  const pending = useChatStateShallow((state) => {
+    return state.gateway.pendingMessages.get(id);
+  });
+
+  // Polling for progress
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTick((t) => t + 1);
+    }, 100);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  var icon = <FaFile />;
+  var text = "????";
+
+  if (pending?.attachments) {
+    var first = pending.attachments[0];
+    icon = GetFileIcon(first.filename, first.type);
+    if (pending.attachments.length == 1) {
+      text = pending.attachments[0].filename;
+    } else {
+      text = `Uploading ${pending.attachments.length} files...`;
+    }
+  }
+
+  return (
+    <div className="message-upload">
+      <div className="message-upload-icon">{icon}</div>
+      <div className="message-upload-content">
+        <div className="message-upload-text">
+          {text}
+          <div className="message-upload-size">
+            {` – ${FormatBytes(pending?.size)}`}
           </div>
-        )}
-        {message.embeds && (
-          <div className="message-embeds">
-            {message.embeds?.map((embed, index) => (
-              <MessageEmbed key={`${id}-embed-${index}`} embed={embed} />
-            ))}
-          </div>
-        )}
+        </div>
+
+        <div className="message-upload-progress">
+          <div
+            className="message-upload-progress-bar"
+            style={{
+              width: `${pending?.progress ?? 0}%`,
+            }}
+          />
+        </div>
       </div>
+      <IconButton
+        tooltip="Cancel"
+        tooltipDirection="top"
+        className="message-upload-cancel"
+        onClick={() => {
+          cancel(id);
+        }}
+      >
+        <FaTimes />
+      </IconButton>
     </div>
   );
 }
@@ -431,7 +627,7 @@ function MessageAttachment({
               loadTimeout.current = window.setTimeout(() => {
                 setIsLoading(true);
                 observer.disconnect();
-              }, _.random(400) + 100);
+              }, Roll(100, 500));
             }
           }
           observer.disconnect();
@@ -450,7 +646,7 @@ function MessageAttachment({
   }, []);
 
   var inner;
-  if (attachment.type == FileType.Image) {
+  if (attachment.type == AttachmentType.Image) {
     inner = (
       <ImageDisplay
         src={attachment.previewURL!}
@@ -458,7 +654,7 @@ function MessageAttachment({
         onClick={onView}
       />
     );
-  } else if (attachment.type == FileType.Video) {
+  } else if (attachment.type == AttachmentType.Video) {
     inner = (
       <VideoDisplay
         src={attachment.originalURL!}
@@ -496,24 +692,21 @@ function MessageAttachment({
 
 function Skeleton({ id }: { id: string }) {
   const gen = new Rand(id.split("-")[1]);
-  const rng = (min: number, max: number) => {
-    return Math.floor(gen.next() * (max - min)) + min;
-  };
   const row = () => {
-    const count = rng(3, 8);
+    const count = Roll(3, 8, gen);
     var length = 0;
     var bubbles = [];
     for (var i = 0; i < count && length < 500; i++) {
-      const bubbleLength = rng(30, 80);
+      const bubbleLength = Roll(30, 80, gen);
       bubbles.push(bubbleLength);
       length += bubbleLength;
     }
     return bubbles;
   };
 
-  const hasMedia = rng(0, 100) < 40;
-  const rowCount = rng(1, 5) + (hasMedia ? 1 : 0);
-  const mediaRow = hasMedia ? rng(1, rowCount) : -1;
+  const hasMedia = Roll(0, 100, gen) < 40;
+  const rowCount = Roll(1, 5, gen) + (hasMedia ? 1 : 0);
+  const mediaRow = hasMedia ? Roll(1, rowCount, gen) : -1;
 
   return (
     <div id={id} className="message-entry skeleton">
@@ -522,18 +715,21 @@ function Skeleton({ id }: { id: string }) {
         <div className="message-header skeleton">
           <div
             className="message-name skeleton"
-            style={{ width: rng(75, 125) }}
+            style={{ width: Roll(75, 125, gen) }}
           />
         </div>
         <div className="message-content">
           <div className="message-skeleton">
-            {_.range(0, rowCount).map((i: number) => {
+            {[...Array(rowCount).keys()].map((i: number) => {
               if (i == mediaRow) {
                 return (
                   <div
                     key={i}
                     className="message-skeleton-media"
-                    style={{ width: rng(150, 400), height: rng(150, 400) }}
+                    style={{
+                      width: Roll(150, 400, gen),
+                      height: Roll(150, 400, gen),
+                    }}
                   />
                 );
               } else {

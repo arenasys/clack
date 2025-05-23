@@ -7,6 +7,7 @@ import Header from "./Header";
 import AttachmentLayer from "./layers/modals/AttachmentModal";
 import ViewerLayer from "./layers/modals/ViewerModal";
 import TooltipPopupLayer from "./layers/popups/TooltipPopup";
+import ContextMenuPopupLayer from "./layers/popups/ContextMenuPopup";
 import UserPopupLayer from "./layers/popups/UserPopup";
 import LoadingLayer from "./layers/LoadingScreen";
 import LoginLayer from "./layers/LoginScreen";
@@ -18,6 +19,7 @@ function App() {
   return (
     <>
       <Client />
+      <div className="monospace-preload">Clack</div>
       <div id="sidebar-container"></div>
       <div id="main-container">
         <div id="header-container">
@@ -57,6 +59,7 @@ function App() {
       </div>
       <AttachmentLayer />
       <ViewerLayer />
+      <ContextMenuPopupLayer />
       <TooltipPopupLayer />
       <UserPopupLayer />
       <LoginLayer />

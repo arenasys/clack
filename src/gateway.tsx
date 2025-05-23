@@ -5,7 +5,7 @@ import {
   Message,
   Snowflake,
   ChannelType,
-  FileType,
+  AttachmentType,
   MessageType,
 } from "./models";
 
@@ -28,7 +28,8 @@ import {
   MessageSendResponse,
 } from "./events";
 
-import { makeSnowflake } from "./util";
+import { MakeSnowflake } from "./util";
+import { useChatState } from "./state";
 
 const previewURL = (id: Snowflake) =>
   `http://${window.location.host}/previews/${id}?type=preview`;
@@ -60,7 +61,7 @@ export interface GatewayPendingAttachment {
   file: File;
   spoilered: boolean;
   filename: string;
-  type: FileType;
+  type: AttachmentType;
   blobURL: string;
 }
 
@@ -324,6 +325,9 @@ interface PendingMessage {
   channel: Snowflake;
   message?: Snowflake;
   attachments?: GatewayPendingAttachment[];
+  progress?: number;
+  size?: number;
+  request?: XMLHttpRequest;
 }
 
 export const enum GatewayAuthState {
@@ -429,9 +433,18 @@ export class Gateway {
     }
   }
 
-  groupChannels() {
-    this.channelGroups = [];
+  processChannels(channels: Channel[]) {
+    channels.forEach((channel) => {
+      this.channels.set(channel.id, channel);
+      this.channelStates.set(channel.id, new GatewayChannelState());
+    });
 
+    channels.forEach((channel) => {
+      channel.parentName = this.channels.get(channel.parent)?.name;
+      this.channels.set(channel.id, channel);
+    });
+
+    this.channelGroups = [];
     const orphanChannels = Array.from(this.channels.values())
       .filter(
         (channel) =>
@@ -651,7 +664,7 @@ export class Gateway {
       return;
     }
 
-    var marker = makeSnowflake();
+    var marker = MakeSnowflake();
     var state = this.channelStates.get(this.currentChannel)!;
 
     var attachments = state.attachments;
@@ -679,6 +692,8 @@ export class Gateway {
       marker: marker,
       channel: this.currentChannel,
       attachments: attachments,
+      progress: 0,
+      size: attachments.reduce((acc, att) => acc + att.file.size, 0),
     });
 
     this.syncCurrent(state);
@@ -710,26 +725,58 @@ export class Gateway {
         form.append(`file_${i}`, att.file, att.filename);
       });
 
-      fetch(uploadURL(msg.slot), {
-        method: "POST",
-        body: form,
-      }).then((response) => {
-        console.log("Upload response", response);
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", uploadURL(msg.slot), true);
+
+      xhr.upload.addEventListener("progress", (e) => {
+        if (e.lengthComputable) {
+          const percent = (e.loaded / e.total) * 100;
+
+          const pending = this.pendingMessages.get(seq);
+          if (pending) {
+            console.log("UPLOAD PROGRESS", pending.progress, "TO", percent);
+            pending.progress = percent;
+          }
+        }
       });
+
+      xhr.addEventListener("load", () => {
+        console.log("Upload complete, status:", xhr.status);
+      });
+      xhr.addEventListener("error", () => {
+        console.error("Upload failed");
+      });
+
+      xhr.send(form);
+      pending.request = xhr;
     } else {
       pending.message = msg.message;
     }
+  }
+
+  cancelMessage(seq: Snowflake) {
+    var pending = this.pendingMessages.get(seq);
+    if (pending == undefined) return;
+
+    if (pending.request) {
+      pending.request.abort();
+    }
+
+    this.pendingMessages.delete(seq);
+
+    const state = this.channelStates.get(pending.channel);
+    if (state == undefined) return;
+
+    state.pendingMessages = state.pendingMessages.filter((m) => m !== seq);
+
+    this.syncCurrent(state);
   }
 
   onOverview(msg: OverviewResponse) {
     console.log("Overview", msg);
     this.roles.setRoles(msg.roles);
 
-    msg.channels.forEach((channel) => {
-      this.channels.set(channel.id, channel);
-      this.channelStates.set(channel.id, new GatewayChannelState());
-    });
-    this.groupChannels();
+    this.processChannels(msg.channels);
 
     this.processUsers(msg.users);
 
@@ -795,7 +842,7 @@ export class Gateway {
       const m = messages[i];
 
       for (const a of m.attachments ?? []) {
-        if (a.type !== FileType.File) {
+        if (a.type !== AttachmentType.File) {
           a.previewURL = previewURL(a.id);
           a.displayURL = displayURL(a.id);
         }
@@ -811,7 +858,7 @@ export class Gateway {
         ];
         for (var d of media) {
           if (d) {
-            d.type = FileType.Image;
+            d.type = AttachmentType.Image;
             d.previewURL = previewURL(d.id);
             d.displayURL = displayURL(d.id);
             d.proxyURL = proxyURL(e.id, d.url);
@@ -819,7 +866,7 @@ export class Gateway {
           }
         }
         if (e.video) {
-          e.video.type = FileType.Video;
+          e.video.type = AttachmentType.Video;
         }
       }
     }

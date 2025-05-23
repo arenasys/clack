@@ -7,13 +7,14 @@ import { BiSolidTrash } from "react-icons/bi";
 
 import { IconButton } from "./Common";
 import { GatewayPendingAttachment } from "../gateway";
-import { FileType } from "../models";
+import { AttachmentType } from "../models";
 import { set } from "date-fns";
 
 export function UploadTile({ file }: { file: GatewayPendingAttachment }) {
   const [spoilered, setSpoilered] = useState(file.spoilered);
   const [filename, setFilename] = useState(file.filename);
 
+  const attachmentModal = useChatState((state) => state.attachmentModal);
   const setAttachmentModal = useChatState((state) => state.setAttachmentModal);
   const setAttachments = useChatState((state) => state.setAttachments);
 
@@ -23,11 +24,11 @@ export function UploadTile({ file }: { file: GatewayPendingAttachment }) {
   }, [file]);
 
   const thumbnail = useMemo(() => {
-    if (file.type === FileType.Image) {
+    if (file.type === AttachmentType.Image) {
       return (
         <img src={file.blobURL} alt={filename} className="upload-thumbnail" />
       );
-    } else if (file.type === FileType.Video) {
+    } else if (file.type === AttachmentType.Video) {
       return (
         <video preload="None" src={file.blobURL} className="upload-thumbnail" />
       );
@@ -53,6 +54,7 @@ export function UploadTile({ file }: { file: GatewayPendingAttachment }) {
         <div className="upload-actions">
           <IconButton
             tooltip={"Spoiler Attachment"}
+            className="upload-actions-button"
             onClick={() => {
               setAttachments(
                 [],
@@ -75,6 +77,9 @@ export function UploadTile({ file }: { file: GatewayPendingAttachment }) {
           </IconButton>
           <IconButton
             tooltip={"Modify Attachment"}
+            className={`upload-actions-button ${
+              attachmentModal?.file?.id === file.id ? "active" : ""
+            }`}
             onClick={() => {
               setAttachmentModal({
                 file: file,
@@ -85,7 +90,7 @@ export function UploadTile({ file }: { file: GatewayPendingAttachment }) {
           </IconButton>
           <IconButton
             tooltip={"Delete Attachment"}
-            iconClasses="red"
+            className="upload-actions-button red"
             onClick={() => {
               setAttachments([], [file], []);
             }}

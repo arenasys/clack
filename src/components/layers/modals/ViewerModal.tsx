@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { Viewable, FileType } from "../../../models";
+import { useEffect, useRef, useMemo, useState } from "react";
+import { Viewable, AttachmentType } from "../../../models";
 
 import { PiArrowLeftBold, PiArrowRightBold } from "react-icons/pi";
 
@@ -82,56 +82,68 @@ export default function ViewerLayer() {
     };
   }, [viewerModal]);
 
-  if (viewerModal == undefined || item == undefined) {
+  var media = useMemo(() => {
+    if (item == undefined) {
+      return null;
+    }
+
+    var maxWidth = 963;
+    var maxHeight = 703;
+
+    var attachWidth = item!.width;
+    var attachHeight = item!.height;
+
+    var displayWidth: number = 0;
+    var displayHeight: number = 0;
+
+    if (maxWidth / maxHeight > attachWidth / attachHeight) {
+      displayHeight = Math.min(attachHeight, maxHeight);
+      displayWidth = (attachWidth / attachHeight) * displayHeight;
+    } else {
+      displayWidth = Math.min(attachWidth, maxWidth);
+      displayHeight = (attachHeight / attachWidth) * displayWidth;
+    }
+
+    var inner: JSX.Element | null = null;
+    if (item!.type == AttachmentType.Image) {
+      inner = (
+        <ImageDisplay
+          src={item!.displayURL!}
+          preload={item!.preload}
+          onClick={() => {}}
+        />
+      );
+    }
+
+    if (item!.type == AttachmentType.Video) {
+      inner = (
+        <VideoDisplay
+          src={item!.originalURL!}
+          poster={item!.displayURL!}
+          preload={item!.preload}
+          showTimestamps={true}
+          showCover={false}
+          onClick={() => {
+            return true;
+          }}
+          videoRef={videoRef}
+        />
+      );
+    }
+
+    console.log("MEDIA", item.width, item.height, displayWidth, displayHeight);
+
+    return {
+      inner: inner,
+      width: displayWidth,
+      height: displayHeight,
+      multi: (viewerModal?.items.length ?? 0) >= 1,
+    };
+  }, [item]);
+
+  if (viewerModal == undefined || item == undefined || media == null) {
     return <></>;
   }
-
-  var maxWidth = 963;
-  var maxHeight = 703;
-
-  var attachWidth = item!.width;
-  var attachHeight = item!.height;
-
-  var displayWidth: number = 0;
-  var displayHeight: number = 0;
-
-  if (maxWidth / maxHeight > attachWidth / attachHeight) {
-    displayHeight = Math.min(attachHeight, maxHeight);
-    displayWidth = (attachWidth / attachHeight) * displayHeight;
-  } else {
-    displayWidth = Math.min(attachWidth, maxWidth);
-    displayHeight = (attachHeight / attachWidth) * displayWidth;
-  }
-
-  var inner = undefined;
-
-  if (item!.type == FileType.Image) {
-    inner = (
-      <ImageDisplay
-        src={item!.displayURL!}
-        preload={item!.preload}
-        onClick={() => {}}
-      />
-    );
-  }
-
-  if (item!.type == FileType.Video) {
-    inner = (
-      <VideoDisplay
-        src={item!.originalURL!}
-        poster={item!.displayURL!}
-        preload={item!.preload}
-        showTimestamps={true}
-        showCover={false}
-        onClick={() => {
-          return true;
-        }}
-        videoRef={videoRef}
-      />
-    );
-  }
-
-  const multiItem = viewerModal?.items.length >= 1;
 
   function onClosing() {
     setIsClosing(true);
@@ -163,7 +175,7 @@ export default function ViewerLayer() {
       closingTime={250}
     >
       <div className="viewer-controls">
-        {multiItem && (
+        {media.multi && (
           <div
             className="viewer-button viewer-left-button"
             onClick={(e) => {
@@ -174,7 +186,7 @@ export default function ViewerLayer() {
             <PiArrowLeftBold className="viewer-button-icon" />
           </div>
         )}
-        {multiItem && (
+        {media.multi && (
           <div
             className="viewer-button viewer-right-button"
             onClick={(e) => {
@@ -193,8 +205,8 @@ export default function ViewerLayer() {
           e.stopPropagation();
         }}
         style={{
-          width: displayWidth,
-          height: displayHeight,
+          width: media.width,
+          height: media.height,
         }}
       >
         <div className="viewer-options-container">
@@ -207,7 +219,7 @@ export default function ViewerLayer() {
             Open in Browser
           </a>
         </div>
-        <div className="viewer-media-container">{inner}</div>
+        <div className="viewer-media-container">{media.inner}</div>
       </div>
     </Modal>
   );

@@ -25,7 +25,7 @@ export function Header() {
         <IconButton
           tooltip={`${showingUserList ? "Hide" : "Show"} User List`}
           tooltipDirection="bottom"
-          iconClasses={`foreground ${showingUserList ? "on" : ""}`}
+          className={`foreground ${showingUserList ? "on" : ""}`}
           onClick={() => {
             setShowingUserList(!showingUserList);
           }}

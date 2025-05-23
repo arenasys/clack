@@ -52,7 +52,7 @@ export default function You() {
 
       <IconButton
         tooltip={muted ? "Disable Mute" : "Enable Mute"}
-        iconClasses={muted ? "red" : ""}
+        className={muted ? "red" : ""}
         onClick={() => setMuted(!muted)}
       >
         {muted ? <MdMicOff className="icon" /> : <MdMic className="icon" />}
@@ -60,7 +60,7 @@ export default function You() {
 
       <IconButton
         tooltip={deafened ? "Disable Deafen" : "Enable Deafen"}
-        iconClasses={deafened ? "red" : ""}
+        className={deafened ? "red" : ""}
         onClick={() => setDeafened(!deafened)}
       >
         {deafened ? (

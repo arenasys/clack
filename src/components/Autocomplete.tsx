@@ -1,0 +1,460 @@
+import {
+  useState,
+  forwardRef,
+  useImperativeHandle,
+  useEffect,
+  useMemo,
+  useRef,
+} from "react";
+
+import { HiOutlineHashtag } from "react-icons/hi";
+
+import { useChatState, useChatStateShallow } from "../state";
+
+import { User, Role, Channel, Emoji } from "../models";
+
+import { FormatColor } from "../util";
+
+import { EmojiEntry, EmojiInline, EmojiLookupSymbol } from "../emoji";
+
+import { UserAvatarSVG } from "./Users";
+
+export const Autocomplete = forwardRef(function Autocomplete(
+  {
+    onSumbit: onComplete,
+  }: { onSumbit: (word: string, completion: string) => void },
+  ref
+) {
+  const [word, setWord] = useState("");
+  const [index, setIndex] = useState(0);
+
+  const [emojiResults, setEmojiResults] = useState<Emoji[]>([]);
+  const [userResults, setUserResults] = useState<User[]>([]);
+  const [roleResults, setRoleResults] = useState<Role[]>([]);
+  const [channelResults, setChannelResults] = useState<Channel[]>([]);
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const searchEmojis = useChatState((state) => state.searchEmojis);
+  const searchUsers = useChatState((state) => state.searchUsers);
+  const searchRoles = useChatState((state) => state.searchRoles);
+  const searchChannels = useChatState((state) => state.searchChannels);
+
+  function getResultsLength() {
+    return (
+      emojiResults.length +
+      userResults.length +
+      roleResults.length +
+      channelResults.length
+    );
+  }
+
+  function getSelectedCompletion(): string {
+    if (index == -1) {
+      return "";
+    }
+
+    if (emojiResults.length > 0) {
+      const entry = EmojiLookupSymbol(emojiResults[index].name)!;
+      return `:${entry.names[0]}: `;
+    }
+
+    if (userResults.length > 0 && index < userResults.length) {
+      return `@${userResults[index].username} `;
+    }
+
+    if (roleResults.length > 0) {
+      return `@${roleResults[index - userResults.length].name} `;
+    }
+
+    if (channelResults.length > 0) {
+      return `#${channelResults[index].name} `;
+    }
+
+    return "";
+  }
+
+  function syncEmojiSearch(word: string) {
+    const mx = 50;
+
+    if (word.length <= 2 || word[0] != ":") {
+      setEmojiResults([]);
+      return;
+    }
+
+    const query = word.slice(1).toLowerCase();
+    const results = searchEmojis(query);
+
+    if (results.length > mx) {
+      results.length = mx;
+    }
+
+    setEmojiResults(results);
+  }
+
+  function syncMemberSearch(word: string) {
+    const mx = 10;
+    const mx_role = 5;
+
+    if (word.length == 0 || word[0] != "@") {
+      setUserResults([]);
+      setRoleResults([]);
+      return;
+    }
+
+    const query = word.slice(1).toLowerCase();
+    const userResults = searchUsers(query);
+    const roleResults = searchRoles(query);
+
+    if (userResults.length > 10) {
+      userResults.length = 10;
+    }
+
+    if (roleResults.length > 10) {
+      roleResults.length = 10;
+    }
+
+    var userCount = Math.min(userResults.length, mx);
+    var roleCount = Math.min(roleResults.length, mx);
+    if (
+      userResults.length > 0 &&
+      roleResults.length > 0 &&
+      userCount + roleCount > mx
+    ) {
+      if (userCount >= mx) {
+        roleCount = Math.min(roleCount, mx_role);
+        userCount = Math.min(userCount, mx - roleCount);
+      } else {
+        roleCount = Math.min(roleCount, mx);
+        userCount = Math.min(userCount, mx - roleCount);
+      }
+    }
+
+    userResults.length = userCount;
+    roleResults.length = roleCount;
+
+    setUserResults(userResults);
+    setRoleResults(roleResults);
+  }
+
+  function syncChannelSearch(word: string) {
+    const mx = 10;
+
+    if (word.length == 0 || word[0] != "#") {
+      setChannelResults([]);
+      return;
+    }
+
+    const query = word.slice(1).toLowerCase();
+    const results = searchChannels(query);
+
+    if (results.length > mx) {
+      results.length = mx;
+    }
+
+    console.log("CHANNELS", results, query);
+
+    setChannelResults(results);
+  }
+
+  function moveIndex(i: number) {
+    if (index == -1) {
+      setIndex(0);
+      return;
+    }
+    const l = getResultsLength();
+    var n = i % l;
+    if (n < 0) n += l;
+    console.log("INDEX", n, l);
+    setIndex(n);
+  }
+
+  useImperativeHandle(ref, () => ({
+    setWord(word: string) {
+      setIndex(0);
+      setWord(word);
+      syncEmojiSearch(word);
+      syncMemberSearch(word);
+      syncChannelSearch(word);
+      scrollRef.current?.scrollTo(0, 0);
+    },
+    selectUp() {
+      moveIndex(index - 1);
+    },
+    selectDown() {
+      moveIndex(index + 1);
+    },
+    showing(): boolean {
+      return getResultsLength() > 0;
+    },
+    completable(): boolean {
+      return getResultsLength() > 0 && index >= 0;
+    },
+    complete(): void {
+      const completion = getSelectedCompletion();
+      if (completion.length > 0) {
+        onComplete(word, completion);
+      }
+    },
+  }));
+
+  if (closed) {
+    return <></>;
+  }
+
+  const anyResults =
+    emojiResults.length > 0 ||
+    userResults.length > 0 ||
+    roleResults.length > 0 ||
+    channelResults.length > 0;
+
+  const memberLabel = userResults.length > 0 ? "Users" : "Roles";
+
+  if (anyResults) {
+    return (
+      <div ref={scrollRef} className="autocomplete thin-scrollbar">
+        {emojiResults.length > 0 && (
+          <AutocompleteCategory text={`Emoji matching ${word}`} />
+        )}
+        {emojiResults.map((result, i) => {
+          const entry = EmojiLookupSymbol(result.name)!;
+          return (
+            <AutocompleteEmoji
+              key={result.name}
+              emoji={entry}
+              index={i}
+              selected={index == i}
+              onMouseEnter={() => {
+                setIndex(i);
+              }}
+              onClick={() => {
+                onComplete(word, `:${entry.names[0]}: `);
+              }}
+            />
+          );
+        })}
+
+        {(userResults.length > 0 || roleResults.length > 0) && (
+          <AutocompleteCategory text={`${memberLabel} matching ${word}`} />
+        )}
+        {userResults.map((result, i) => {
+          return (
+            <AutocompleteUser
+              key={result.id}
+              user={result}
+              index={i}
+              selected={index == i}
+              onMouseEnter={() => {
+                setIndex(i);
+              }}
+              onClick={() => {
+                onComplete(word, `@${result.username} `);
+              }}
+            />
+          );
+        })}
+        {userResults.length > 0 && roleResults.length > 0 && (
+          <AutocompleteDivider />
+        )}
+        {roleResults.map((result, _i) => {
+          const i = _i + userResults.length;
+          return (
+            <AutocompleteRole
+              key={result.id}
+              _role={result}
+              index={i}
+              selected={index == i}
+              onMouseEnter={() => {
+                setIndex(i);
+              }}
+              onClick={() => {
+                onComplete(word, `@${result.name} `);
+              }}
+            />
+          );
+        })}
+        {channelResults.length > 0 && (
+          <AutocompleteCategory text={`Channels matching ${word}`} />
+        )}
+        {channelResults.map((result, i) => {
+          return (
+            <AutocompleteChannel
+              key={result.id}
+              channel={result}
+              index={i}
+              selected={index == i}
+              onMouseEnter={() => {
+                setIndex(i);
+              }}
+              onClick={() => {
+                onComplete(word, `#${result.name} `);
+              }}
+            />
+          );
+        })}
+      </div>
+    );
+  }
+  return <></>;
+});
+
+function AutocompleteCategory({ text }: { text: String }) {
+  return <div className="autocomplete-category text-heading-small">{text}</div>;
+}
+
+function AutocompleteDivider({}: {}) {
+  return <div className="autocomplete-divider"></div>;
+}
+
+function AutocompleteEmoji({
+  emoji,
+  index,
+  selected,
+  ...rest
+}: {
+  emoji: EmojiEntry;
+  index: number;
+  selected: boolean;
+} & React.HTMLProps<HTMLDivElement>) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (selected && ref.current) {
+      ref.current.scrollIntoView({
+        behavior: "instant",
+        block: index == 0 ? "center" : "nearest",
+        inline: "start",
+      });
+    }
+  }, [selected]);
+
+  return (
+    <div
+      ref={ref}
+      className={`autocomplete-entry small ${selected ? "selected" : ""}`}
+      {...rest}
+    >
+      <div className="autocomplete-icon">
+        <EmojiInline text={emoji.symbol} />
+      </div>
+      <div className="autocomplete-text">{`:${emoji.names[0]}:`}</div>
+    </div>
+  );
+}
+
+function AutocompleteUser({
+  user,
+  index,
+  selected,
+  ...rest
+}: {
+  user: User;
+  index: number;
+  selected: boolean;
+} & React.HTMLProps<HTMLDivElement>) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (selected && ref.current) {
+      ref.current.scrollIntoView({
+        behavior: "instant",
+        block: index == 0 ? "center" : "nearest",
+        inline: "start",
+      });
+    }
+  }, [selected]);
+
+  return (
+    <div
+      ref={ref}
+      className={`autocomplete-entry ${selected ? "selected" : ""}`}
+      {...rest}
+    >
+      <div className="autocomplete-icon user">
+        <UserAvatarSVG user={user} size={30} />
+      </div>
+      <div className="autocomplete-text">{user.nickname ?? user.username}</div>
+      <div className="autocomplete-subtext">{user.username}</div>
+    </div>
+  );
+}
+
+function AutocompleteRole({
+  _role,
+  index,
+  selected,
+  ...rest
+}: {
+  _role: Role;
+  index: number;
+  selected: boolean;
+} & React.HTMLProps<HTMLDivElement>) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (selected && ref.current) {
+      ref.current.scrollIntoView({
+        behavior: "instant",
+        block: index == 0 ? "center" : "nearest",
+        inline: "start",
+      });
+    }
+  }, [selected]);
+
+  return (
+    <div
+      ref={ref}
+      className={`autocomplete-entry small ${selected ? "selected" : ""}`}
+      {...rest}
+    >
+      <div
+        className="autocomplete-text"
+        style={{ color: FormatColor(_role.color) }}
+      >
+        {"@" + _role.name}
+      </div>
+      <div className="autocomplete-subtext">
+        {"Notify users with this role."}
+      </div>
+    </div>
+  );
+}
+
+function AutocompleteChannel({
+  channel,
+  index,
+  selected,
+  ...rest
+}: {
+  channel: Channel;
+  index: number;
+  selected: boolean;
+} & React.HTMLProps<HTMLDivElement>) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (selected && ref.current) {
+      ref.current.scrollIntoView({
+        behavior: "instant",
+        block: index == 0 ? "center" : "nearest",
+        inline: "start",
+      });
+    }
+  }, [selected]);
+
+  return (
+    <div
+      ref={ref}
+      className={`autocomplete-entry small ${selected ? "selected" : ""}`}
+      {...rest}
+    >
+      <div className="autocomplete-icon channel">
+        <HiOutlineHashtag />
+      </div>
+      <div className="autocomplete-text">{channel.name}</div>
+      {channel.parentName && (
+        <div className="autocomplete-subtext">{channel.parentName}</div>
+      )}
+    </div>
+  );
+}

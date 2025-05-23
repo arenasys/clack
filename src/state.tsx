@@ -1,10 +1,21 @@
 import { create } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import { produce, current } from "immer";
-import _ from "underscore";
 
 import { Gateway, GatewayAuthState, GatewayPendingAttachment } from "./gateway";
-import { Viewable, Snowflake, User } from "./models";
+import {
+  Viewable,
+  Snowflake,
+  User,
+  Channel,
+  Emoji,
+  Role,
+  ChannelType,
+} from "./models";
+import { EmojiSearchByPartialName } from "./emoji";
+import { StringSearchScore } from "./util";
+
+import fuzzysort from "fuzzysort";
 
 export interface TooltipPopupState {
   content: string;
@@ -28,6 +39,12 @@ export interface AttachmentModalState {
   file: GatewayPendingAttachment;
 }
 
+export interface MessageContextMenuState {
+  messageId: Snowflake;
+  direction: "right" | "right-top";
+  position: { x: number; y: number };
+}
+
 export interface InputStates {
   text: string;
   files: File[];
@@ -40,6 +57,7 @@ export interface ChatState {
   tooltipPopup?: TooltipPopupState;
   tooltipIndex: number;
   userPopup?: UserPopupState;
+  contextMenuPopup?: MessageContextMenuState;
   viewerModal?: ViewerModalState;
   attachmentModal?: AttachmentModalState;
   showingUserList: boolean;
@@ -64,6 +82,7 @@ export interface ChatState {
   // Actions
   changeChannel: (channel: string) => void;
   sendMessage: (content: string) => void;
+  cancelMessage: (message: Snowflake) => void;
   setChatScroll: (top: string, center: string, bottom: string) => void;
   setUserScroll: (
     topGroup: string,
@@ -73,6 +92,7 @@ export interface ChatState {
   ) => void;
   setTooltipPopup: (tooltipPopup: TooltipPopupState | undefined) => number;
   clearTooltipPopup: (idx: number) => void;
+  setContextMenuPopup: (menuPopup: MessageContextMenuState | undefined) => void;
   setUserPopup: (userPopup: UserPopupState | undefined) => void;
   setViewerModal: (viewerModal: ViewerModalState | undefined) => void;
   setAttachmentModal: (
@@ -85,6 +105,30 @@ export interface ChatState {
     remove: GatewayPendingAttachment[],
     update: GatewayPendingAttachment[]
   ) => void;
+
+  // Search
+  searchEmojis: (query: string) => Emoji[];
+  searchUsers: (query: string) => User[];
+  searchChannels: (query: string) => Channel[];
+  searchRoles: (query: string) => Role[];
+
+  //Lookup
+  lookupUser: (
+    name: string | undefined,
+    id: string | undefined
+  ) => User | undefined;
+  lookupChannel: (
+    name: string | undefined,
+    id: string | undefined
+  ) => Channel | undefined;
+  lookupRole: (
+    name: string | undefined,
+    id: string | undefined
+  ) => Role | undefined;
+  lookupEmoji: (
+    name: string | undefined,
+    id: string | undefined
+  ) => Emoji | undefined;
 
   // Update
   _u: number;
@@ -113,6 +157,13 @@ export const useChatState = create<ChatState>()((set) => {
       set(
         produce((state: ChatState) => {
           state.gateway.sendMessage(content);
+          state.update(state);
+        })
+      ),
+    cancelMessage: (message) =>
+      set(
+        produce((state: ChatState) => {
+          state.gateway.cancelMessage(message);
           state.update(state);
         })
       ),
@@ -152,6 +203,12 @@ export const useChatState = create<ChatState>()((set) => {
           if (state.tooltipIndex === idx) {
             state.tooltipPopup = undefined;
           }
+        })
+      ),
+    setContextMenuPopup: (menuPopup) =>
+      set(
+        produce((state: ChatState) => {
+          state.contextMenuPopup = menuPopup;
         })
       ),
     setUserPopup: (userPopup) =>
@@ -250,6 +307,165 @@ export const useChatState = create<ChatState>()((set) => {
         })
       ),
 
+    searchEmojis: (query: string) => {
+      if (query.length <= 1) {
+        return [];
+      }
+
+      if (!/^[a-z0-9_]+$/.test(query)) {
+        return [];
+      }
+
+      const results = EmojiSearchByPartialName(query);
+      if (results.length == 0) {
+        return [];
+      }
+
+      if (results.length > 50) {
+        results.length = 50;
+      }
+
+      return results.map((e) => {
+        const emoji: Emoji = {
+          name: e.symbol,
+        };
+        return emoji;
+      });
+    },
+    searchUsers: (query: string) => {
+      const results: [User, number][] = [];
+      set(
+        produce((state: ChatState) => {
+          query = query.toLowerCase();
+          state.gateway.users.forEach((user) => {
+            const username = user.username.toLowerCase();
+            const nickname = user.nickname?.toLowerCase() || "";
+
+            const score = Math.max(
+              fuzzysort.single(query, username)?.score ?? 0,
+              fuzzysort.single(query, nickname)?.score ?? 0
+            );
+
+            if (score > 0 || query.length == 0) {
+              results.push([user, score]);
+            }
+          });
+        })
+      );
+      return results
+        .sort((a, b) => {
+          return b[1] - a[1];
+        })
+        .map((e) => e[0]);
+    },
+    searchChannels: (query: string) => {
+      const results: [Channel, number][] = [];
+      set(
+        produce((state: ChatState) => {
+          query = query.toLowerCase();
+
+          state.gateway.channels.forEach((channel) => {
+            if (channel.type === ChannelType.Category) return;
+            const name = channel.name.toLowerCase();
+
+            const score = fuzzysort.single(query, name)?.score ?? 0;
+
+            if (score > 0 || query.length == 0) {
+              results.push([channel, score]);
+            }
+          });
+        })
+      );
+      return results
+        .sort((a, b) => {
+          return b[1] - a[1];
+        })
+        .map((e) => e[0]);
+    },
+    searchRoles: (query: string) => {
+      const results: [Role, number][] = [];
+      set(
+        produce((state: ChatState) => {
+          query = query.toLowerCase();
+
+          state.gateway.roles.store.forEach((role) => {
+            const name = role.name.toLowerCase();
+
+            const score = fuzzysort.single(query, name)?.score ?? 0;
+
+            if (score > 0 || query.length == 0) {
+              results.push([role, score]);
+            }
+          });
+        })
+      );
+      return results
+        .sort((a, b) => {
+          return b[1] - a[1];
+        })
+        .map((e) => e[0]);
+    },
+
+    lookupUser: (name, id) => {
+      var user: User | undefined = undefined;
+      set(
+        produce((state: ChatState) => {
+          if (id) {
+            user = state.gateway.users.get(id);
+          } else if (name) {
+            for (const u of state.gateway.users.values()) {
+              if (u.username === name || u.nickname === name) {
+                user = u;
+                break;
+              }
+            }
+          }
+        })
+      );
+      return user;
+    },
+    lookupChannel: (name, id) => {
+      var channel: Channel | undefined = undefined;
+      set(
+        produce((state: ChatState) => {
+          if (id) {
+            channel = state.gateway.channels.get(id);
+          } else if (name) {
+            for (const c of state.gateway.channels.values()) {
+              if (c.name === name) {
+                channel = c;
+                break;
+              }
+            }
+          }
+        })
+      );
+      return channel;
+    },
+    lookupRole: (name, id) => {
+      var role: Role | undefined = undefined;
+      set(
+        produce((state: ChatState) => {
+          if (id) {
+            role = state.gateway.roles.get(id);
+          } else if (name) {
+            for (const r of state.gateway.roles.store.values()) {
+              if (r.name === name) {
+                role = r;
+                break;
+              }
+            }
+          }
+        })
+      );
+      return role;
+    },
+    lookupEmoji: (name, id) => {
+      var emoji: Emoji | undefined = undefined;
+      return emoji;
+    },
+    // Update
+
     _u: 0,
     update: (state: ChatState) => {
       if (state.gateway.requests.length > 0) {
@@ -260,6 +476,42 @@ export const useChatState = create<ChatState>()((set) => {
     },
   };
 });
+
+export interface ChatStateLookups {
+  lookupUser: (
+    username: string | undefined,
+    id: string | undefined
+  ) => User | undefined;
+  lookupRole: (
+    rolename: string | undefined,
+    id: string | undefined
+  ) => Role | undefined;
+  lookupChannel: (
+    channelname: string | undefined,
+    id: string | undefined
+  ) => Channel | undefined;
+  lookupEmoji: (
+    emojiName: string | undefined,
+    id: string | undefined
+  ) => Emoji | undefined;
+  setUserPopup: (userPopup: UserPopupState | undefined) => void;
+  setContextMenuPopup: (menuPopup: MessageContextMenuState | undefined) => void;
+  setTooltipPopup: (tooltipPopup: TooltipPopupState | undefined) => number;
+  clearTooltipPopup: (idx: number) => void;
+}
+
+export const GetChatStateLookups = () => {
+  return useChatStateShallow((state) => ({
+    lookupUser: state.lookupUser,
+    lookupRole: state.lookupRole,
+    lookupChannel: state.lookupChannel,
+    lookupEmoji: state.lookupEmoji,
+    setUserPopup: state.setUserPopup,
+    setContextMenuPopup: state.setContextMenuPopup,
+    setTooltipPopup: state.setTooltipPopup,
+    clearTooltipPopup: state.clearTooltipPopup,
+  })) as ChatStateLookups;
+};
 
 export const useChatStateShallow = <T,>(selector: (state: ChatState) => T) =>
   useChatState(useShallow(selector));

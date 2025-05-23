@@ -1,4 +1,3 @@
-import { VList, VListHandle } from "virtua";
 import { useChatState, useChatStateShallow } from "../state";
 
 import { HiOutlineHashtag } from "react-icons/hi";
@@ -57,16 +56,13 @@ function Channels() {
 
   const noGroup = channelGroups.length == 0;
 
-  const ref = useRef<VListHandle>(null);
-
   if (channelGroups.length === 0) {
     return <></>;
   }
 
   return (
-    <VList
+    <div
       id="channel-list"
-      ref={ref}
       className={"thin-scrollbar" + (noGroup ? " no-group" : "")}
     >
       {channelGroups.map((group) => {
@@ -84,7 +80,7 @@ function Channels() {
           );
         }
       })}
-    </VList>
+    </div>
   );
 }
 

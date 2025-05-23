@@ -2,9 +2,9 @@ import { useEffect, useRef, useMemo, useState } from "react";
 
 import { useChatState } from "../../../state";
 
-import { FileType } from "../../../models";
+import { AttachmentType } from "../../../models";
 
-import { Modal, ModalHandle } from "../../Common";
+import { ClickWrapper, Modal, ModalHandle } from "../../Common";
 import { set } from "date-fns";
 
 export default function AttachmentLayer() {
@@ -31,9 +31,9 @@ export default function AttachmentLayer() {
   const thumbnail = useMemo(() => {
     const file = attachmentModal?.file;
     if (file == undefined) return null;
-    if (file.type === FileType.Image) {
+    if (file.type === AttachmentType.Image) {
       return <img src={file.blobURL} className="attachment-modal-thumbnail" />;
-    } else if (file.type === FileType.Video) {
+    } else if (file.type === AttachmentType.Video) {
       return (
         <video
           preload="None"

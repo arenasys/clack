@@ -9,7 +9,9 @@ import { EventType, MessageSendRequest } from "../events";
 
 import { Attachments } from "./Attachments";
 
-import { chooseFiles, getFileType, makeSnowflake } from "../util";
+import { Autocomplete } from "./Autocomplete";
+
+import { ChooseFiles, GetFileType, MakeSnowflake } from "../util";
 
 import MarkdownTextbox from "./Input";
 import List from "./List";
@@ -37,8 +39,18 @@ export function Chat() {
 export function Input() {
   const [submit, setSubmit] = useState(0);
   const [plaintext, setPlaintext] = useState("");
-  const textboxRef = useRef<{
+  const textboxRef = useRef<HTMLDivElement>(null);
+  const editorRef = useRef<{
     clear: () => void;
+    complete: (word: string, completion: string) => void;
+  }>();
+  const autocompleteRef = useRef<{
+    setWord: (word: string) => void;
+    selectUp: () => void;
+    selectDown: () => void;
+    showing: () => boolean;
+    completable: () => boolean;
+    complete: () => void;
   }>();
 
   const currentChannel = useChatState((state) => state.gateway.currentChannel);
@@ -50,13 +62,35 @@ export function Input() {
   );
 
   useEffect(() => {
-    textboxRef.current?.clear();
+    editorRef.current?.clear();
   }, [submit]);
+
+  const autocomplete = (
+    <Autocomplete
+      ref={autocompleteRef}
+      onSumbit={(word, completion) => {
+        editorRef.current?.complete(word, completion);
+      }}
+    />
+  );
 
   const editor = (
     <MarkdownTextbox
-      ref={textboxRef}
-      onValue={(text: string) => {
+      ref={editorRef}
+      onValue={(text: string, cursor: number) => {
+        console.log("TEXT", text);
+
+        if (cursor == -1) {
+          autocompleteRef.current?.setWord("");
+        } else {
+          const currentWord = text.slice(0, cursor).split(/\s|>/g).pop();
+          if (currentWord === undefined) {
+            autocompleteRef.current?.setWord("");
+          } else {
+            autocompleteRef.current?.setWord(currentWord);
+          }
+        }
+
         setPlaintext(text);
       }}
     />
@@ -64,6 +98,7 @@ export function Input() {
 
   return (
     <>
+      {autocomplete}
       {attaching && <Attachments />}
       <div
         id="textbox-container"
@@ -72,14 +107,14 @@ export function Input() {
         <button
           className="input-button clickable-button"
           onClick={() => {
-            chooseFiles().then((files) => {
+            ChooseFiles().then((files) => {
               const newFiles = files.map((file) => {
                 return {
-                  id: makeSnowflake(),
+                  id: MakeSnowflake(),
                   file: file,
                   filename: file.name,
                   spoilered: false,
-                  type: getFileType(file),
+                  type: GetFileType(file),
                   blobURL: "",
                 };
               });
@@ -91,8 +126,38 @@ export function Input() {
           <RiAddCircleFill className="input-icon" />
         </button>
         <div
+          ref={textboxRef}
           id="textbox"
           onKeyDown={(event) => {
+            const autocomplete = autocompleteRef.current;
+            if (autocomplete && autocomplete.showing()) {
+              if (event.key === "ArrowUp") {
+                event.preventDefault();
+                autocomplete.selectUp();
+                return;
+              } else if (event.key === "ArrowDown") {
+                event.preventDefault();
+                autocomplete.selectDown();
+                return;
+              } else if (event.key === "Tab" && autocomplete.completable()) {
+                event.preventDefault();
+                autocomplete.complete();
+                return;
+              } else if (
+                event.key === "Enter" &&
+                !event.shiftKey &&
+                autocomplete.completable()
+              ) {
+                event.preventDefault();
+                autocomplete.complete();
+                return;
+              } else if (event.key === "Escape") {
+                event.preventDefault();
+                autocomplete.setWord("");
+                return;
+              }
+            }
+
             if (event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();
               if (currentChannel !== undefined) {
