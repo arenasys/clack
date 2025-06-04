@@ -3,7 +3,7 @@ import 'prismjs/components/prism-markdown'*/
 
 import { useChatState, GetChatStateLookups, ChatStateLookups } from "../state";
 
-import {
+import React, {
   useCallback,
   useMemo,
   useLayoutEffect,
@@ -38,12 +38,12 @@ import { HistoryEditor, withHistory } from "slate-history";
 
 import { HiOutlineHashtag } from "react-icons/hi";
 import { isKeyHotkey } from "is-hotkey";
-import hljs from "highlight.js";
 
 import { EmojiInline, EmojiSymbolToName, EmojiSymbolByName } from "../emoji";
 
 import {
-  GetDecoration,
+  GetLineDecoration,
+  GetGlobalDecoration,
   SlatePart,
   SlateRange,
   SlateMatch,
@@ -88,10 +88,10 @@ type ChannelMentionElement = {
   channel: Channel;
   children: TextElement[];
 };
-type CodeLineElement = {
+/*type CodeLineElement = {
   type: "codeLine";
   children: TextElement[];
-};
+};*/
 type TextElement = {
   text: string;
 };
@@ -114,6 +114,7 @@ function IsInlineElement(type: string): boolean {
 const emojiRegex = /(?<!\\):(\w+):/g;
 const mentionRegex = /(?<=\s|^)(@|#)([\w]+)(?=[\s#@:])/g;
 const inlineCodeRegex = /(?<!\\)(`{1,2})([\s\S]*?[^`])(\1)(?!`)/g; // syntax, codeRule
+const codeBlockRegex = /(?<!\\)(`{3})([\s\S]*?)(\1)(?!`)/g;
 
 enum PlaintextType {
   USER = 1,
@@ -164,7 +165,7 @@ function ToPlaintext(element: InlineElement, type: PlaintextType): string {
 declare module "slate" {
   interface CustomTypes {
     Editor: BaseEditor & ReactEditor;
-    Element: LineElement | CodeLineElement | InlineElement;
+    Element: LineElement | InlineElement;
     Text: TextElement;
   }
 }
@@ -176,15 +177,18 @@ function GetFragmentString(
   var lines: string[] = [];
   for (const node of fragment) {
     var line = "";
-    if (Element.isElement(node) && node.type === "line") {
-      for (const child of node.children) {
-        if (Text.isText(child)) {
-          line += child.text;
-        } else if (Element.isElement(child)) {
-          line += ToPlaintext(child, type);
+    if (Element.isElement(node)) {
+      if (node.type === "line") {
+        for (const child of node.children) {
+          if (Text.isText(child)) {
+            line += child.text;
+          } else if (Element.isElement(child)) {
+            line += ToPlaintext(child, type);
+          }
         }
       }
     }
+
     lines.push(line);
   }
   return lines.join("\n");
@@ -214,6 +218,23 @@ function GetElementParts(input: LineElement, path: Path): SlatePart[] {
   return parts;
 }
 
+function GetEditorParts(editor: FullEditor): SlatePart[] {
+  var parts: SlatePart[] = [];
+  const l = editor.children.length;
+
+  for (var i = 0; i < l; i++) {
+    const child = editor.children[i];
+    if (Element.isElement(child) && child.type === "line") {
+      parts.push(...GetElementParts(child, [i]));
+      if (i < l - 1) {
+        parts[parts.length - 1].text += "\n";
+      }
+    }
+  }
+
+  return parts;
+}
+
 function GetRegexMatches(parts: SlatePart[], regex: RegExp): SlateMatch[] {
   return GetMatches(parts, (text, callback) => {
     text.replace(regex, callback);
@@ -239,7 +260,7 @@ function NormalizeElement(
   const siblings = parentNode.children;
 
   if (index === 0 || !Text.isText(siblings[index - 1])) {
-    console.log("INSERTING BEFORE", path);
+    //console.log("INSERTING BEFORE", path);
     Transforms.insertNodes(
       editor,
       { text: "" },
@@ -249,7 +270,7 @@ function NormalizeElement(
   }
 
   if (index === siblings.length - 1 || !Text.isText(siblings[index + 1])) {
-    console.log("INSERTING AFTER", path);
+    //console.log("INSERTING AFTER", path);
     Transforms.insertNodes(
       editor,
       { text: "" },
@@ -316,7 +337,7 @@ function ReplaceMatches(
 
     if (IsInRanges(match.range, excludedRanges)) continue;
 
-    console.log("REPLACING MATCH", parts, match);
+    //console.log("REPLACING MATCH", parts, match);
 
     if (typeof e === "string") {
       Transforms.delete(editor, {
@@ -332,6 +353,24 @@ function ReplaceMatches(
     return true;
   }
   return false;
+}
+
+function GetCodeBlockRanges(editor: FullEditor): Range[] {
+  return GetRegexMatches(GetEditorParts(editor), codeBlockRegex).map(
+    (match) => {
+      const inset = match.groups[0].length;
+      return {
+        anchor: {
+          path: match.range.anchor.path,
+          offset: match.range.anchor.offset + inset,
+        },
+        focus: {
+          path: match.range.focus.path,
+          offset: match.range.focus.offset - inset,
+        },
+      };
+    }
+  );
 }
 
 function GetInlineCodeMatches(parts: SlatePart[]): SlateMatch[] {
@@ -354,10 +393,23 @@ function GetInlineCodeRanges(parts: SlatePart[]): Range[] {
   });
 }
 
+function GetCodeRanges(editor: FullEditor, lineParts: SlatePart[]): Range[] {
+  return GetCodeBlockRanges(editor).concat(GetInlineCodeRanges(lineParts));
+}
+
+interface CustomEditor extends BaseEditor {
+  decorations: any;
+}
+
+type FullEditor = BaseEditor & ReactEditor & HistoryEditor & CustomEditor;
+
 const withCustom = (
-  editor: BaseEditor & ReactEditor & HistoryEditor,
+  baseEditor: BaseEditor & ReactEditor & HistoryEditor,
   lookups: ChatStateLookups
-) => {
+): FullEditor => {
+  var editor: FullEditor = baseEditor as FullEditor;
+  editor.decorations = [];
+
   const { normalizeNode, isInline, isVoid } = editor;
 
   editor.isInline = (element) =>
@@ -379,43 +431,46 @@ const withCustom = (
     if (Element.isElement(node) && node.type === "line") {
       var altered = false;
       const parts = GetElementParts(node, path);
+      const codeRanges = GetCodeRanges(editor, parts);
 
-      // replace inline elements inside code with their text representation
-      for (const match of GetInlineCodeMatches(parts)) {
-        const start = match.range.anchor.path[1];
-        const end = match.range.focus.path[1];
+      if (!altered) {
+        // replace inline elements inside code with their text representation
+        for (const range of codeRanges) {
+          for (let i = 0; i <= node.children.length; i++) {
+            const child = node.children[i];
+            const childPath = [...path, i];
+            var text: string | undefined = undefined;
+            if (
+              Element.isElement(child) &&
+              IsInlineElement(child.type) &&
+              Range.includes(range, childPath)
+            ) {
+              text = ToPlaintext(child, PlaintextType.USER);
+              console.log("COLLAPSING INLINE", child.type, text);
+            }
 
-        for (let i = start; i <= end; i++) {
-          const child = node.children[i];
-          const childPath = [...path, i];
-          var text: string | undefined = undefined;
-          if (Element.isElement(child) && IsInlineElement(child.type)) {
-            text = ToPlaintext(child, PlaintextType.USER);
-            console.log("COLLAPSING INLINE", child.type, text);
-          }
-
-          if (text !== undefined) {
-            Transforms.insertNodes(
-              editor,
-              { text: text },
-              { at: Path.next(childPath), select: false }
-            );
-            Transforms.removeNodes(editor, {
-              at: childPath,
-            });
-            altered = true;
+            if (text !== undefined) {
+              Transforms.insertNodes(
+                editor,
+                { text: text },
+                { at: Path.next(childPath), select: false }
+              );
+              Transforms.removeNodes(editor, {
+                at: childPath,
+              });
+              altered = true;
+            }
           }
         }
       }
 
       // replace emoji names (:emoji:) with an emoji element
       if (!altered) {
-        const inlineCodeRanges = GetInlineCodeRanges(parts);
         altered = ReplaceMatches(
           GetRegexMatches(parts, emojiRegex),
           editor,
           parts,
-          inlineCodeRanges,
+          codeRanges,
           (match) => {
             const name = match.groups[0];
             const emoji = EmojiSymbolByName(name);
@@ -432,13 +487,11 @@ const withCustom = (
 
       // replace mentions (@user) with an inline mention element
       if (!altered) {
-        const inlineCodeRanges = GetInlineCodeRanges(parts);
-
         altered = ReplaceMatches(
           GetRegexMatches(parts, mentionRegex),
           editor,
           parts,
-          inlineCodeRanges,
+          codeRanges,
           (match) => {
             const type = match.groups[0];
             const name = match.groups[1];
@@ -477,8 +530,6 @@ const withCustom = (
 
       // replace emoji unicode (🔥) with an emoji element or name
       if (!altered) {
-        const inlineCodeRanges = GetInlineCodeRanges(parts);
-
         altered = ReplaceMatches(
           GetEmojiMatches(parts),
           editor,
@@ -499,7 +550,7 @@ const withCustom = (
             const name = EmojiSymbolToName(emoji);
             if (name === undefined) return;
 
-            if (IsInRanges(match.range, inlineCodeRanges)) {
+            if (IsInRanges(match.range, codeRanges)) {
               return `:${name}:`;
             } else {
               return {
@@ -515,6 +566,7 @@ const withCustom = (
 
     normalizeNode(entry);
   };
+
   return editor;
 };
 
@@ -539,19 +591,14 @@ const MarkdownTextbox = forwardRef(function MarkdownTextbox(
 
   const currentEditor = useChatState((state) => state.gateway.currentEditor);
 
+  const lastValue = useRef<string | undefined>(undefined);
+  const cachedDecorations = useRef<SlateRange[] | undefined>(undefined);
+
   function getValue(editor: string | undefined): Descendant[] {
     var value: Descendant[] = [
       {
         type: "line",
-        children: [
-          { text: "wow " },
-          {
-            type: "emoji",
-            emoji: "❤️",
-            children: [{ text: "" }],
-          },
-          { text: " this is a test" },
-        ],
+        children: [{ text: "" }],
       },
     ];
 
@@ -587,6 +634,9 @@ const MarkdownTextbox = forwardRef(function MarkdownTextbox(
       Transforms.insertText(editor, completion);
       ReactEditor.focus(editor);
     },
+    insert: (text: string) => {
+      Transforms.insertText(editor, text);
+    },
   }));
 
   const editor = useMemo(() => {
@@ -595,9 +645,24 @@ const MarkdownTextbox = forwardRef(function MarkdownTextbox(
 
   const decorate = useCallback(([node, path]: [any, any]) => {
     if (Element.isElement(node) && node.type === "line") {
-      const parts = GetElementParts(node, path);
-      const ranges = GetDecoration(parts);
-      return ranges;
+      const lineRanges = GetLineDecoration(GetElementParts(node, path));
+
+      const globalRanges =
+        cachedDecorations.current ??
+        GetGlobalDecoration(GetEditorParts(editor));
+      if (cachedDecorations.current == undefined) {
+        cachedDecorations.current = globalRanges;
+      }
+
+      return lineRanges
+        .filter((range) => {
+          return globalRanges.every((globalRange) => {
+            return !Range.includes(globalRange, range);
+          });
+        })
+        .concat(globalRanges);
+
+      return lineRanges;
     } else {
       return [];
     }
@@ -652,15 +717,20 @@ const MarkdownTextbox = forwardRef(function MarkdownTextbox(
     return false;
   }
 
-  function isInsideCode(editor: BaseEditor & ReactEditor): boolean {
+  function isInsideCode(editor: FullEditor): boolean {
     const { selection } = editor;
     if (selection && Range.isCollapsed(selection)) {
+      if (
+        GetCodeBlockRanges(editor).some((range) =>
+          Range.includes(range, selection)
+        )
+      ) {
+        return true;
+      }
+
       for (var i = 0; i < editor.children.length; i++) {
         const line = editor.children[i];
         if (Element.isElement(line)) {
-          if (line.type === "codeLine") {
-            return true;
-          }
           if (line.type === "line") {
             const path = [i];
             const parts = GetElementParts(line, path);
@@ -681,7 +751,7 @@ const MarkdownTextbox = forwardRef(function MarkdownTextbox(
   const onKeyDown: React.KeyboardEventHandler<HTMLInputElement> = (event) => {
     const { selection } = editor;
 
-    // Treat emoji's as a single character, dont let the selection land inside it.
+    // Treat inlines as a single character, dont let the selection land inside it.
     // Double move the selection to get out the other side.
     // NOTE: Using isSelectable and isElementReadOnly cause bigger selection issues.
 
@@ -726,7 +796,17 @@ const MarkdownTextbox = forwardRef(function MarkdownTextbox(
           Transforms.move(editor, { distance: 1, unit: "offset" });
         }
 
-        setEditorState(JSON.stringify(value));
+        const valueString = JSON.stringify(value);
+
+        if (lastValue.current !== valueString) {
+          Editor.normalize(editor, {
+            force: true,
+          });
+          lastValue.current = valueString;
+          cachedDecorations.current = undefined;
+        }
+
+        setEditorState(valueString);
         sendOnValue();
       }}
       onSelectionChange={(selection) => {}}
@@ -739,9 +819,11 @@ const MarkdownTextbox = forwardRef(function MarkdownTextbox(
         onKeyDown={onKeyDown}
         onCopy={(event) => {
           event.preventDefault();
+          if (!editor.selection || Range.isCollapsed(editor.selection)) return;
+          const fragment = Editor.fragment(editor, editor.selection);
           event.clipboardData.setData(
             "text/plain",
-            GetFragmentString(editor.children, PlaintextType.USER)
+            GetFragmentString(fragment, PlaintextType.USER)
           );
         }}
       />
@@ -770,6 +852,9 @@ function CustomLeaf({
   if (leaf.type && leaf.type !== SyntaxType.Content) {
     classes.push("leaf-syntax");
 
+    if (leaf.type == SyntaxType.Language) {
+      classes.push("leaf-language");
+    }
     if (leaf.type == SyntaxType.Start) {
       classes.push("leaf-before");
     }
@@ -778,14 +863,32 @@ function CustomLeaf({
     }
   }
 
-  if (leaf.prism) {
-    for (let i = 0; i < leaf.prism.length; i++) {
-      classes.push("prism-" + leaf.prism[i]);
+  var spellcheck = true;
+  if (
+    leaf.styles &&
+    (leaf.styles.includes(SyntaxStyle.Code) ||
+      leaf.styles.includes(SyntaxStyle.CodeBlock) ||
+      leaf.styles.includes(SyntaxStyle.URL))
+  ) {
+    spellcheck = false;
+  }
+
+  if (leaf.hljs) {
+    classes.push("hljs");
+    for (let i = 0; i < leaf.hljs.length; i++) {
+      const keywords = ("hljs-" + leaf.hljs[i]).split(".");
+      for (let j = 0; j < keywords.length; j++) {
+        var keyword = keywords[j];
+        for (var k = 0; k < j; k++) {
+          keyword += "_";
+        }
+        classes.push(keyword);
+      }
     }
   }
 
   return (
-    <span {...attributes} className={classes.join(" ")}>
+    <span {...attributes} spellCheck={spellcheck} className={classes.join(" ")}>
       {children}
     </span>
   );
@@ -807,14 +910,6 @@ function CustomElement({
       <div className="line" {...attributes}>
         {children}
       </div>
-    );
-  }
-
-  if (element.type === "codeLine") {
-    return (
-      <span className="codeLine language-python" {...attributes}>
-        {children}
-      </span>
     );
   }
 

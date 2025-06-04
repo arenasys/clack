@@ -9,11 +9,14 @@ import ViewerLayer from "./layers/modals/ViewerModal";
 import TooltipPopupLayer from "./layers/popups/TooltipPopup";
 import ContextMenuPopupLayer from "./layers/popups/ContextMenuPopup";
 import UserPopupLayer from "./layers/popups/UserPopup";
+import EmojiPickerPopupLayer from "./layers/popups/EmojiPickerPopup";
 import LoadingLayer from "./layers/LoadingScreen";
 import LoginLayer from "./layers/LoginScreen";
 import CaptchaLayer from "./layers/CaptchaScreen";
 
 import { RiArrowDownSLine } from "react-icons/ri";
+
+import hljs from "highlight.js";
 
 function App() {
   return (
@@ -60,11 +63,12 @@ function App() {
       <AttachmentLayer />
       <ViewerLayer />
       <ContextMenuPopupLayer />
-      <TooltipPopupLayer />
       <UserPopupLayer />
+      <EmojiPickerPopupLayer />
       <LoginLayer />
       <CaptchaLayer />
       <LoadingLayer />
+      <TooltipPopupLayer />
     </>
   );
 }

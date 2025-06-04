@@ -20,7 +20,7 @@ export function IconButton({
   onClick,
 }: {
   children?: any;
-  tooltip: string;
+  tooltip?: string;
   tooltipDirection?: "top" | "bottom" | "left" | "right";
   className?: string;
   onClick?: (rect: DOMRect) => void;
@@ -34,7 +34,7 @@ export function IconButton({
   const [isHovered, setIsHovered] = useState(false);
 
   useEffect(() => {
-    if (isHovered) {
+    if (isHovered && tooltip) {
       var rect = ref.current!.getBoundingClientRect();
 
       const index = setTooltipPopup({
@@ -147,7 +147,7 @@ export function TooltipWrapper({
   return (
     <span
       ref={ref}
-      className={className}
+      className={"tooltip-wrapper " + className}
       onMouseEnter={() => {
         setIsHovered(true);
       }}

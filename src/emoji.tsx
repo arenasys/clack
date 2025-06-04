@@ -5,21 +5,35 @@ import twemoji from "@twemoji/api";
 import { useChatState, useChatStateShallow } from "./state";
 import { TooltipWrapper } from "./components/Common";
 
-import fuzzysort from "fuzzysort";
+import { StringSearchScore } from "./util";
 
 export interface EmojiEntry {
   names: string[];
   symbol: string;
   version: number;
+
+  diversity?: string[];
+  hasMultiDiversityParent?: boolean;
+  hasDiversityParent?: boolean;
+
+  diversityChildren?: EmojiDiversity[];
+  hasMultiDiversity?: boolean;
+  hasDiversity?: boolean;
 }
 
-export interface EmojiDiversity extends EmojiEntry {
+export interface EmojiChild {
+  names: string[];
+  symbol: string;
+  version: number;
+}
+
+export interface EmojiDiversity extends EmojiChild {
   diversity: string[];
   hasMultiDiversityParent?: boolean;
   hasDiversityParent?: boolean;
 }
 
-export interface EmojiParent extends EmojiEntry {
+export interface EmojiParent extends EmojiChild {
   diversityChildren?: EmojiDiversity[];
   hasMultiDiversity?: boolean;
   hasDiversity?: boolean;
@@ -29,9 +43,42 @@ export interface EmojiMap {
   [category: string]: EmojiParent[];
 }
 
-import emojiMapRaw from "./assets/emoji_map.json";
+export interface EmojiIndexEntry extends EmojiEntry {
+  codePoint: string;
+  index: number;
+}
+export interface EmojiIndex {
+  [key: string | number]: EmojiIndexEntry;
+}
 
-const emojiMap: EmojiMap = emojiMapRaw as EmojiMap;
+export interface EmojiNames {
+  [name: string]: string[];
+}
+
+import emojiMapRaw from "./assets/emoji_map.json";
+export const emojiMap: EmojiMap = emojiMapRaw as EmojiMap;
+
+import emojiNamesRaw from "./assets/emoji_names.json";
+export const emojiNames: EmojiNames = emojiNamesRaw as EmojiNames;
+
+export const emojiIndex: EmojiIndex = (() => {
+  const idx: EmojiIndex = {};
+  var i = 0;
+  EmojiFind((emoji) => {
+    const entry = {
+      ...emoji,
+      codePoint: EmojiToCodePoint(emoji.symbol),
+      index: i,
+    };
+    idx[entry.names[0]] = entry;
+    idx[entry.symbol] = entry;
+    idx[entry.codePoint] = entry;
+    idx[i] = entry;
+    i++;
+    return false;
+  }, true);
+  return idx;
+})();
 
 export function EmojiToCodePoint(emoji: string): string {
   const vs = /\uFE0F/g;
@@ -56,24 +103,6 @@ export function FindEmojis(text: string): EmojiMatch[] {
   return matches;
 }
 
-export function ReplaceEmojis(text: string): JSX.Element {
-  var last = 0;
-
-  var elements: (JSX.Element | string)[] = [];
-
-  for (const match of FindEmojis(text)) {
-    elements.push(text.substring(last, match.start));
-    elements.push(<EmojiInline text={match.emoji} />);
-    last = match.end;
-  }
-
-  if (last < text.length) {
-    elements.push(text.substring(last));
-  }
-
-  return <>{elements}</>;
-}
-
 export function EmojiFind(
   callback: (emoji: EmojiEntry) => boolean,
   includeChildren: boolean = false
@@ -91,16 +120,16 @@ export function EmojiFind(
   }
 }
 
-export function EmojiLookupName(name: string): EmojiEntry | undefined {
-  return EmojiFind((emoji) => {
-    return emoji.names.includes(name);
-  });
+export function EmojiLookupName(name: string): EmojiIndexEntry | undefined {
+  return emojiIndex[name];
 }
 
-export function EmojiLookupSymbol(symbol: string): EmojiEntry | undefined {
-  return EmojiFind((emoji) => {
-    return emoji.symbol === symbol;
-  });
+export function EmojiLookupSymbol(symbol: string): EmojiIndexEntry | undefined {
+  return emojiIndex[symbol];
+}
+
+export function EmojiLookupIndex(index: number): EmojiIndexEntry | undefined {
+  return emojiIndex[index];
 }
 
 export function EmojiSymbolByName(name: string): string | undefined {
@@ -118,11 +147,32 @@ export function EmojiSymbolToName(emoji: string): string | undefined {
 export function EmojiSearchByPartialName(text: string): EmojiEntry[] {
   const emojis: [EmojiEntry, number][] = [];
   EmojiFind((emoji) => {
-    var score = fuzzysort.single(text, emoji.names[0]);
-    //var score = StringSearchScore(text, emoji.names[0], "_");
-    if (score && score.score > 0) {
-      emojis.push([emoji, score.score]);
+    const emojiName = emoji.names[0];
+
+    var score = StringSearchScore(text, emojiName, "_");
+
+    if (emoji.names.length > 1) {
+      score = Math.max(
+        score,
+        ...emoji.names.map((name) => {
+          return StringSearchScore(text, name, "_") * 0.5;
+        })
+      );
     }
+
+    if (emojiName in emojiNames) {
+      score = Math.max(
+        score,
+        ...emojiNames[emojiName]?.map((name) => {
+          return StringSearchScore(text, name, " ") * 0.25;
+        })
+      );
+    }
+
+    if (score > 0) {
+      emojis.push([emoji, score]);
+    }
+
     return false;
   }, false);
 
@@ -140,8 +190,13 @@ export function EmojiSearchByPartialName(text: string): EmojiEntry[] {
     .map((e) => e[0]);
 }
 
-export function EmojiInline({ text }: { text: string }) {
-  const codePoint = EmojiToCodePoint(text);
+export function EmojiInline({
+  text,
+  jumbo,
+}: {
+  text: string;
+  jumbo?: boolean;
+}) {
   const name = EmojiSymbolToName(text);
 
   return (
@@ -150,13 +205,57 @@ export function EmojiInline({ text }: { text: string }) {
       tooltipDirection="top"
       tooltipDelay={500}
     >
-      <img
-        className="emoji"
-        src={`/emoji/svg/${codePoint}.svg`}
-        alt={text}
-        draggable="false"
-        data-slate-type="inline-emoji"
-      />
+      <EmojiSVG symbol={text} className={jumbo ? "jumbo" : ""} />
     </TooltipWrapper>
+  );
+}
+
+export function EmojiSVG({
+  symbol,
+  className = "",
+}: {
+  symbol: string;
+  className?: string;
+}) {
+  return (
+    <img
+      className={`emoji ${className}`}
+      src={`/emoji/svg/${EmojiLookupSymbol(symbol)!.codePoint}.svg`}
+      alt={symbol}
+      draggable="false"
+    />
+  );
+}
+
+const ATLAS_COLS = 64;
+const ATLAS_ROWS = 60;
+
+export function EmojiPNG({
+  symbol,
+  size,
+  className,
+}: {
+  symbol: string;
+  size?: number;
+  className?: string;
+}) {
+  const entry = emojiIndex[symbol];
+  size = size || 40;
+
+  const atlas = size >= 40 ? "80x80" : "40x40";
+
+  return (
+    <div
+      style={{
+        backgroundImage: `url(/emoji/png/${atlas}.png)`,
+        backgroundSize: `${ATLAS_COLS * size}px ${ATLAS_ROWS * size}px`,
+        backgroundPosition: `-${(entry.index % ATLAS_COLS) * size}px -${
+          Math.floor(entry.index / ATLAS_COLS) * size
+        }px`,
+        width: `${size}px`,
+        height: `${size}px`,
+      }}
+      className={className}
+    ></div>
   );
 }

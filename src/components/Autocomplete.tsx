@@ -27,6 +27,7 @@ export const Autocomplete = forwardRef(function Autocomplete(
 ) {
   const [word, setWord] = useState("");
   const [index, setIndex] = useState(0);
+  const [isKeyboard, setIsKeyboard] = useState(false);
 
   const [emojiResults, setEmojiResults] = useState<Emoji[]>([]);
   const [userResults, setUserResults] = useState<User[]>([]);
@@ -157,21 +158,26 @@ export const Autocomplete = forwardRef(function Autocomplete(
     setChannelResults(results);
   }
 
-  function moveIndex(i: number) {
+  function changeIndex(newIndex: number, keyboard: boolean) {
+    setIsKeyboard(keyboard);
+    setIndex(newIndex);
+  }
+
+  function moveIndex(i: number, keyboard: boolean) {
     if (index == -1) {
-      setIndex(0);
+      changeIndex(0, keyboard);
       return;
     }
     const l = getResultsLength();
     var n = i % l;
     if (n < 0) n += l;
     console.log("INDEX", n, l);
-    setIndex(n);
+    changeIndex(n, keyboard);
   }
 
   useImperativeHandle(ref, () => ({
     setWord(word: string) {
-      setIndex(0);
+      changeIndex(0, true);
       setWord(word);
       syncEmojiSearch(word);
       syncMemberSearch(word);
@@ -179,10 +185,10 @@ export const Autocomplete = forwardRef(function Autocomplete(
       scrollRef.current?.scrollTo(0, 0);
     },
     selectUp() {
-      moveIndex(index - 1);
+      moveIndex(index - 1, true);
     },
     selectDown() {
-      moveIndex(index + 1);
+      moveIndex(index + 1, true);
     },
     showing(): boolean {
       return getResultsLength() > 0;
@@ -224,8 +230,9 @@ export const Autocomplete = forwardRef(function Autocomplete(
               emoji={entry}
               index={i}
               selected={index == i}
-              onMouseEnter={() => {
-                setIndex(i);
+              jump={isKeyboard}
+              onMouseMove={() => {
+                if (index != i) changeIndex(i, false);
               }}
               onClick={() => {
                 onComplete(word, `:${entry.names[0]}: `);
@@ -244,8 +251,9 @@ export const Autocomplete = forwardRef(function Autocomplete(
               user={result}
               index={i}
               selected={index == i}
-              onMouseEnter={() => {
-                setIndex(i);
+              jump={isKeyboard}
+              onMouseMove={() => {
+                if (index != i) changeIndex(i, false);
               }}
               onClick={() => {
                 onComplete(word, `@${result.username} `);
@@ -264,8 +272,9 @@ export const Autocomplete = forwardRef(function Autocomplete(
               _role={result}
               index={i}
               selected={index == i}
-              onMouseEnter={() => {
-                setIndex(i);
+              jump={isKeyboard}
+              onMouseMove={() => {
+                if (index != i) changeIndex(i, false);
               }}
               onClick={() => {
                 onComplete(word, `@${result.name} `);
@@ -283,8 +292,9 @@ export const Autocomplete = forwardRef(function Autocomplete(
               channel={result}
               index={i}
               selected={index == i}
-              onMouseEnter={() => {
-                setIndex(i);
+              jump={isKeyboard}
+              onMouseMove={() => {
+                if (index != i) changeIndex(i, false);
               }}
               onClick={() => {
                 onComplete(word, `#${result.name} `);
@@ -310,16 +320,18 @@ function AutocompleteEmoji({
   emoji,
   index,
   selected,
+  jump,
   ...rest
 }: {
   emoji: EmojiEntry;
   index: number;
   selected: boolean;
+  jump: boolean;
 } & React.HTMLProps<HTMLDivElement>) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (selected && ref.current) {
+    if (selected && ref.current && jump) {
       ref.current.scrollIntoView({
         behavior: "instant",
         block: index == 0 ? "center" : "nearest",
@@ -346,16 +358,18 @@ function AutocompleteUser({
   user,
   index,
   selected,
+  jump,
   ...rest
 }: {
   user: User;
   index: number;
   selected: boolean;
+  jump: boolean;
 } & React.HTMLProps<HTMLDivElement>) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (selected && ref.current) {
+    if (selected && ref.current && jump) {
       ref.current.scrollIntoView({
         behavior: "instant",
         block: index == 0 ? "center" : "nearest",
@@ -383,16 +397,18 @@ function AutocompleteRole({
   _role,
   index,
   selected,
+  jump,
   ...rest
 }: {
   _role: Role;
   index: number;
   selected: boolean;
+  jump: boolean;
 } & React.HTMLProps<HTMLDivElement>) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (selected && ref.current) {
+    if (selected && ref.current && jump) {
       ref.current.scrollIntoView({
         behavior: "instant",
         block: index == 0 ? "center" : "nearest",
@@ -424,16 +440,18 @@ function AutocompleteChannel({
   channel,
   index,
   selected,
+  jump,
   ...rest
 }: {
   channel: Channel;
   index: number;
   selected: boolean;
+  jump: boolean;
 } & React.HTMLProps<HTMLDivElement>) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (selected && ref.current) {
+    if (selected && ref.current && jump) {
       ref.current.scrollIntoView({
         behavior: "instant",
         block: index == 0 ? "center" : "nearest",

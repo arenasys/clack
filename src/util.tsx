@@ -42,6 +42,8 @@ export function StringSearchScore(
 ) {
   if (needle.length == 0) return 0.0;
   if (haystack.length == 0) return 0.0;
+  needle = needle.toLowerCase();
+  haystack = haystack.toLowerCase();
   var score = 0;
   const i = haystack.indexOf(needle);
   if (i >= 0) {
@@ -61,6 +63,19 @@ export function StringSearchScore(
     }
   }
   return score;
+}
+
+export function BoundingBox(
+  x: number,
+  y: number,
+  rect: { x: number; y: number; width: number; height: number }
+) {
+  return (
+    x >= rect.x &&
+    x <= rect.x + rect.width &&
+    y >= rect.y &&
+    y <= rect.y + rect.height
+  );
 }
 
 export function FormatDateTime(date: Date) {

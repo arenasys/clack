@@ -18,6 +18,17 @@ export default function UserPopupLayer() {
     return <></>;
   }
 
+  var flip = false;
+  if (userPopup.direction == "left" && userPopup.position.y < 300) {
+    flip = true;
+  }
+  if (
+    userPopup.direction == "right" &&
+    userPopup.position.y > window.innerHeight - 300
+  ) {
+    flip = true;
+  }
+
   return (
     <ClickWrapper
       passthrough={true}
@@ -31,11 +42,22 @@ export default function UserPopupLayer() {
       <div className="layer-container layer-popup">
         <div
           ref={ref}
-          className={"user-popup user-popup-" + userPopup.direction}
-          style={{
-            top: `clamp(0px, ${userPopup.position.y}px, calc(100vh - 300px))`,
-            left: userPopup.position.x,
-          }}
+          className={
+            "user-popup user-popup-" +
+            userPopup.direction +
+            (flip ? " flip" : "")
+          }
+          style={
+            userPopup.direction === "left"
+              ? {
+                  bottom: userPopup.position.y,
+                  right: userPopup.position.x,
+                }
+              : {
+                  top: userPopup.position.y,
+                  left: userPopup.position.x,
+                }
+          }
         >
           <div className="user-popup-content">
             <div className="user-popup-header">

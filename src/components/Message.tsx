@@ -6,7 +6,7 @@ import {
 
 import { useEffect, useRef, useState, useMemo } from "react";
 
-import { GetHTML } from "../syntax";
+import { SyntaxContent } from "../syntax";
 
 import { Attachment, AttachmentType, Embed, EmbedType } from "../models";
 
@@ -180,7 +180,12 @@ function Message({ id }: { id: string }) {
   }
 
   const messageContent = useMemo(() => {
-    return GetHTML(message?.content ?? "", lookups);
+    return (
+      <SyntaxContent
+        text={message?.content ?? ""}
+        lookups={lookups}
+      ></SyntaxContent>
+    );
   }, [message?.edited_timestamp]);
 
   const messageActions = useMemo(() => {

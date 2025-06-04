@@ -30,6 +30,12 @@ export interface UserPopupState {
   position: { x: number; y: number };
 }
 
+export interface EmojiPickerPopupState {
+  position: { x: number; y: number };
+  direction: "top" | "bottom";
+  onPick: (emoji: string) => void;
+}
+
 export interface ViewerModalState {
   items: Viewable[];
   index: number;
@@ -50,6 +56,13 @@ export interface InputStates {
   files: File[];
 }
 
+function changeAnchoring(position: { x: number; y: number }) {
+  const window = document.documentElement.getBoundingClientRect();
+  position.x = window.width - position.x;
+  position.y = window.height - position.y;
+  return position;
+}
+
 export interface ChatState {
   gateway: Gateway;
 
@@ -57,6 +70,7 @@ export interface ChatState {
   tooltipPopup?: TooltipPopupState;
   tooltipIndex: number;
   userPopup?: UserPopupState;
+  emojiPickerPopup?: EmojiPickerPopupState;
   contextMenuPopup?: MessageContextMenuState;
   viewerModal?: ViewerModalState;
   attachmentModal?: AttachmentModalState;
@@ -94,6 +108,9 @@ export interface ChatState {
   clearTooltipPopup: (idx: number) => void;
   setContextMenuPopup: (menuPopup: MessageContextMenuState | undefined) => void;
   setUserPopup: (userPopup: UserPopupState | undefined) => void;
+  setEmojiPickerPopup: (
+    emojiPickerPopup: EmojiPickerPopupState | undefined
+  ) => void;
   setViewerModal: (viewerModal: ViewerModalState | undefined) => void;
   setAttachmentModal: (
     attachmentModal: AttachmentModalState | undefined
@@ -214,7 +231,26 @@ export const useChatState = create<ChatState>()((set) => {
     setUserPopup: (userPopup) =>
       set(
         produce((state: ChatState) => {
+          if (userPopup !== undefined && userPopup.direction === "left") {
+            userPopup.position = changeAnchoring(userPopup.position);
+          }
+
           state.userPopup = userPopup;
+        })
+      ),
+    setEmojiPickerPopup: (emojiPickerPopup) =>
+      set(
+        produce((state: ChatState) => {
+          if (
+            emojiPickerPopup !== undefined &&
+            emojiPickerPopup.direction === "top"
+          ) {
+            emojiPickerPopup.position = changeAnchoring(
+              emojiPickerPopup.position
+            );
+          }
+
+          state.emojiPickerPopup = emojiPickerPopup;
         })
       ),
     setViewerModal: (viewerModal) =>

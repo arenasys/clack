@@ -1,9 +1,14 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { Range, Point, Path, Descendant, last } from "slate";
 
-import { ReplaceEmojis } from "./emoji";
+import { FindEmojis, EmojiInline } from "./emoji";
 import { GetChatStateLookups, ChatStateLookups } from "./state";
 import { FormatColor } from "./util";
+
+import hljs from "highlight.js";
+
+//import "highlight.js/styles/github-dark-dimmed.min.css";
+//import "highlight.js/styles/atom-one-dark-reasonable.min.css";
 
 export enum SyntaxStyle {
   CodeBlock = "codeblock",
@@ -16,6 +21,7 @@ export enum SyntaxStyle {
   UserMention = "userMention",
   RoleMention = "roleMention",
   ChannelMention = "channelMention",
+  URL = "url",
 }
 
 export enum SyntaxType {
@@ -23,6 +29,7 @@ export enum SyntaxType {
   Start = "start",
   End = "end",
   Submatch = "submatch",
+  Language = "language",
 }
 
 export type SyntaxMatcher = (
@@ -35,7 +42,15 @@ export type SyntaxRule = {
   chr: string;
   style: SyntaxStyle;
   ranges: (match: string, offset: number, groups: string[]) => SyntaxRange[];
-  html: (children: JSX.Element, lookups: ChatStateLookups) => JSX.Element;
+  html: ({
+    children,
+    lookups,
+    params,
+  }: {
+    children: JSX.Element;
+    lookups: ChatStateLookups;
+    params: { [key: string]: string };
+  }) => JSX.Element;
 };
 
 export type SyntaxRange = {
@@ -43,6 +58,7 @@ export type SyntaxRange = {
   styles: SyntaxStyle[];
   start: number;
   end: number;
+  hljs?: string[];
 };
 
 export type SlatePart = {
@@ -56,6 +72,7 @@ export type SlateRange = {
   styles: SyntaxStyle[];
   anchor: Point;
   focus: Point;
+  hljs?: string[];
 };
 
 export type SlatePartMap = {
@@ -105,16 +122,137 @@ function commonRanges(
   return ranges;
 }
 
+function codeBlockRanges(
+  offset: number,
+  groups: string[],
+  highlight: boolean = false
+): SyntaxRange[] {
+  var ranges: SyntaxRange[] = [];
+
+  const style = codeBlockRule.style;
+  const [start, content, end] = groups;
+
+  ranges.push({
+    styles: [style],
+    type: SyntaxType.Start,
+    start: offset,
+    end: offset + start.length,
+  });
+
+  offset += start.length;
+
+  var language = "";
+  var lines = content;
+  if (content.includes("\n")) {
+    language = content.split("\n")[0] + "\n";
+    lines = content.slice(language.length);
+  }
+
+  const validLanguage =
+    highlight && hljs.getLanguage(language.trim()) !== undefined;
+
+  if (language.length !== 0) {
+    ranges.push({
+      type: SyntaxType.Language,
+      styles: [style],
+      start: offset,
+      end: offset + language.length,
+      hljs: validLanguage ? ["language"] : undefined,
+    });
+    offset += language.length;
+  }
+
+  if (validLanguage) {
+    type Node = { children: (Node | string)[]; scope?: string };
+    const highlight: Node = (
+      hljs.highlight(lines, { language: language.trim() })._emitter as any
+    ).stack[0];
+
+    const highlightRanges: SyntaxRange[] = [];
+
+    function walk(node: Node, o: number, scopes: string[] = []): number {
+      scopes = scopes.slice();
+      if (node.scope !== undefined) {
+        scopes.push(node.scope);
+      }
+      for (const child of node.children) {
+        if (typeof child === "string") {
+          highlightRanges.push({
+            type: SyntaxType.Content,
+            styles: [style],
+            start: o,
+            end: o + child.length,
+            hljs: scopes.length !== 0 ? scopes.slice() : [],
+          });
+          o += child.length;
+        } else {
+          o = walk(child, o, scopes.slice());
+        }
+      }
+      return o;
+    }
+    walk(highlight, offset);
+    ranges.push(...highlightRanges);
+  } else {
+    ranges.push({
+      type: SyntaxType.Content,
+      styles: [style],
+      start: offset,
+      end: offset + lines.length,
+    });
+  }
+  offset += lines.length;
+
+  if (end.length !== 0) {
+    ranges.push({
+      type: SyntaxType.End,
+      styles: [style],
+      start: offset,
+      end: offset + end.length,
+    });
+    offset += end.length;
+  }
+
+  return ranges;
+}
+
 export const codeBlockRule: SyntaxRule = {
-  chr: "`",
+  chr: "```",
   style: SyntaxStyle.CodeBlock,
   regex: /^(```)([\s\S]*?)(```|$)/,
   ranges: (_, offset, groups) => {
-    return commonRanges(offset, groups, codeBlockRule, false);
+    return codeBlockRanges(offset, groups, false);
   },
-  html: (children) => {
-    return <pre>{children}</pre>;
+  html: ({ children, lookups, params }) => {
+    const ref = useRef<HTMLElement>(null);
+
+    useEffect(() => {
+      if (ref.current && params.language) {
+        const lang = params.language.trim();
+        if (hljs.getLanguage(lang)) {
+          hljs.highlightElement(ref.current);
+        }
+      }
+    }, [ref.current]);
+
+    return (
+      <pre>
+        <code ref={ref} className={`${params.language ?? ""}`}>
+          {children}
+        </code>
+      </pre>
+    );
   },
+};
+
+export const codeBlockHighlightRule: SyntaxRule = {
+  chr: codeBlockRule.chr,
+  style: codeBlockRule.style,
+  regex: codeBlockRule.regex,
+  ranges: (_, offset, groups) => {
+    return codeBlockRanges(offset, groups, true);
+  },
+  html: codeBlockRule.html,
 };
 
 export const codeRule: SyntaxRule = {
@@ -124,8 +262,8 @@ export const codeRule: SyntaxRule = {
   ranges: (_, offset, groups) => {
     return commonRanges(offset, groups, codeRule, false);
   },
-  html: (children) => {
-    return <pre>{children}</pre>;
+  html: ({ children, lookups, params }) => {
+    return <code className="inline">{children}</code>;
   },
 };
 
@@ -136,7 +274,7 @@ export const italicsRule: SyntaxRule = {
   ranges: (_, offset, groups) => {
     return commonRanges(offset, groups, italicsRule);
   },
-  html: (children) => {
+  html: ({ children, lookups, params }) => {
     return <i>{children}</i>;
   },
 };
@@ -152,37 +290,37 @@ export const italicsAltRule: SyntaxRule = {
 };
 
 export const boldRule: SyntaxRule = {
-  chr: "*",
+  chr: "**",
   style: SyntaxStyle.Bold,
   regex: /^(\*\*)((?:\\[\s\S]|[^\\])+?)(\*\*)(?!\*)/,
   ranges: (_, offset, groups) => {
     return commonRanges(offset, groups, boldRule);
   },
-  html: (children) => {
+  html: ({ children, lookups, params }) => {
     return <b>{children}</b>;
   },
 };
 
 export const underlineRule: SyntaxRule = {
-  chr: "_",
+  chr: "__",
   style: SyntaxStyle.Underline,
   regex: /^(__)((?:\\[\s\S]|[^\\])+?)(__)(?!_)/,
   ranges: (_, offset, groups) => {
     return commonRanges(offset, groups, underlineRule);
   },
-  html: (children) => {
+  html: ({ children, lookups, params }) => {
     return <u>{children}</u>;
   },
 };
 
 export const strikethroughRule: SyntaxRule = {
-  chr: "~",
+  chr: "~~",
   style: SyntaxStyle.Strikethrough,
   regex: /^(~~)((?:\\[\s\S]|[^\\])+?)(~~)(?!~)/,
   ranges: (_, offset, groups) => {
     return commonRanges(offset, groups, strikethroughRule);
   },
-  html: (children) => {
+  html: ({ children, lookups, params }) => {
     return <s>{children}</s>;
   },
 };
@@ -208,13 +346,13 @@ export const escapeRule: SyntaxRule = {
     ];
     return ranges;
   },
-  html: (children) => {
+  html: ({ children, lookups, params }) => {
     return <span>{children}</span>;
   },
 };
 
 export const userMentionRule: SyntaxRule = {
-  chr: "<",
+  chr: "<@",
   style: SyntaxStyle.UserMention,
   regex: /^<@([0-9]+)>/,
   ranges: (match: string, offset: number, groups: string[]) => {
@@ -228,7 +366,7 @@ export const userMentionRule: SyntaxRule = {
     ];
     return ranges;
   },
-  html: (children, lookups) => {
+  html: ({ children, lookups, params }) => {
     const text = children.props.children[0];
     const id = userMentionRule.regex.exec(text)?.[1];
     if (id !== undefined) {
@@ -261,7 +399,7 @@ export const userMentionRule: SyntaxRule = {
 };
 
 export const roleMentionRule: SyntaxRule = {
-  chr: "<",
+  chr: "<@&",
   style: SyntaxStyle.RoleMention,
   regex: /^<@&([0-9]+)>/,
   ranges: (match: string, offset: number, groups: string[]) => {
@@ -275,7 +413,7 @@ export const roleMentionRule: SyntaxRule = {
     ];
     return ranges;
   },
-  html: (children, lookups) => {
+  html: ({ children, lookups, params }) => {
     const text = children.props.children[0];
     const id = roleMentionRule.regex.exec(text)?.[1];
     if (id !== undefined) {
@@ -301,7 +439,7 @@ export const roleMentionRule: SyntaxRule = {
 };
 
 export const channelMentionRule: SyntaxRule = {
-  chr: "<",
+  chr: "<#",
   style: SyntaxStyle.ChannelMention,
   regex: /^<#([0-9]+)>/,
   ranges: (match: string, offset: number, groups: string[]) => {
@@ -315,7 +453,7 @@ export const channelMentionRule: SyntaxRule = {
     ];
     return ranges;
   },
-  html: (children, lookups) => {
+  html: ({ children, lookups, params }) => {
     const text = children.props.children[0];
     const id = channelMentionRule.regex.exec(text)?.[1];
     var name = "Unknown Channel";
@@ -334,7 +472,32 @@ export const channelMentionRule: SyntaxRule = {
   },
 };
 
-export const inlineRuleOrdering: SyntaxRule[] = [
+export const urlRule: SyntaxRule = {
+  chr: "http",
+  style: SyntaxStyle.URL,
+  regex: /^(https?:\/\/[^\s<]+[^<.,:;"')\]\s])/,
+  ranges: (match: string, offset: number, groups: string[]) => {
+    const ranges: SyntaxRange[] = [
+      {
+        type: SyntaxType.Content,
+        styles: [urlRule.style],
+        start: offset,
+        end: offset + match.length,
+      },
+    ];
+    return ranges;
+  },
+  html: ({ children, lookups, params }) => {
+    const text = children.props.children[0];
+    return (
+      <a href={text} target="_blank" rel="noopener noreferrer">
+        {text}
+      </a>
+    );
+  },
+};
+
+export const lineRuleOrdering: SyntaxRule[] = [
   escapeRule,
   codeRule,
   underlineRule,
@@ -342,9 +505,15 @@ export const inlineRuleOrdering: SyntaxRule[] = [
   italicsRule,
   italicsAltRule,
   strikethroughRule,
+  urlRule,
 ];
 
 export const globalRuleOrdering: SyntaxRule[] = [
+  escapeRule,
+  codeBlockHighlightRule,
+];
+
+export const fullRuleOrdering: SyntaxRule[] = [
   escapeRule,
   codeBlockRule,
   codeRule,
@@ -356,6 +525,7 @@ export const globalRuleOrdering: SyntaxRule[] = [
   userMentionRule,
   roleMentionRule,
   channelMentionRule,
+  urlRule,
 ];
 
 export const ruleMap = {
@@ -369,6 +539,7 @@ export const ruleMap = {
   [SyntaxStyle.UserMention]: userMentionRule,
   [SyntaxStyle.RoleMention]: roleMentionRule,
   [SyntaxStyle.ChannelMention]: channelMentionRule,
+  [SyntaxStyle.URL]: urlRule,
 };
 
 function ParseMatch(
@@ -388,7 +559,7 @@ function ParseMatch(
 function ParseRanges(
   text: string,
   types: SyntaxStyle[] = [],
-  rules: SyntaxRule[] = inlineRuleOrdering
+  rules: SyntaxRule[] = lineRuleOrdering
 ): SyntaxRange[] {
   var ranges: SyntaxRange[] = [];
   var offset = 0;
@@ -408,7 +579,7 @@ function ParseRanges(
     var found = false;
 
     for (const rule of rules) {
-      if (subtext.length < 1 || subtext[0] !== rule.chr) {
+      if (subtext.length === 0 || !subtext.startsWith(rule.chr)) {
         continue;
       }
 
@@ -450,6 +621,7 @@ function ParseRanges(
               styles: rangeTypes,
               start: range.start + offset,
               end: range.end + offset,
+              hljs: range.hljs,
             });
           }
         }
@@ -515,10 +687,10 @@ function PartsToMap(parts: SlatePart[]): [SlatePartMap[], string] {
   return [partMap, text];
 }
 
-export function GetDecoration(parts: SlatePart[]): SlateRange[] {
+function GetDecorations(parts: SlatePart[], rules: SyntaxRule[]): SlateRange[] {
   const [partMap, text] = PartsToMap(parts);
 
-  var ranges: SyntaxRange[] = ParseRanges(text);
+  var ranges: SyntaxRange[] = ParseRanges(text, [], rules);
   var slateRanges: SlateRange[] = [];
 
   for (const range of ranges) {
@@ -537,14 +709,22 @@ export function GetDecoration(parts: SlatePart[]): SlateRange[] {
     slateRanges.push({
       type: range.type,
       styles: [...new Set(range.styles)],
+      hljs: range.hljs?.slice(),
       anchor: start,
       focus: end,
     });
   }
 
-  //console.log("DECORATION", text, ranges, slateRanges);
-
   return slateRanges;
+}
+
+export function GetLineDecoration(parts: SlatePart[]): SlateRange[] {
+  return GetDecorations(parts, lineRuleOrdering);
+}
+
+export function GetGlobalDecoration(parts: SlatePart[]): SlateRange[] {
+  console.log("GetGlobalDecoration");
+  return GetDecorations(parts, globalRuleOrdering);
 }
 
 export function GetMatches(
@@ -582,22 +762,60 @@ export function GetMatches(
   return matches;
 }
 
-export function GetHTML(text: string, lookups: ChatStateLookups) {
-  var ranges: SyntaxRange[] = ParseRanges(text, [], globalRuleOrdering);
+export function SyntaxContent({
+  text,
+  lookups,
+}: {
+  text: string;
+  lookups: ChatStateLookups;
+}) {
+  var ranges: SyntaxRange[] = ParseRanges(text, [], fullRuleOrdering);
 
   var elements = [];
 
+  var lang = "";
+  var i = 0;
+
   for (const range of ranges) {
+    if (range.type == SyntaxType.Language) {
+      lang = text.slice(range.start, range.end).trim();
+    }
     if (range.type == SyntaxType.Content) {
       const elementText = text.slice(range.start, range.end);
-      var element = ReplaceEmojis(elementText);
 
+      var elementChildren: (JSX.Element | string)[] = [];
+
+      var last = 0;
+      for (const match of FindEmojis(elementText)) {
+        if (match.start > last) {
+          elementChildren.push(elementText.substring(last, match.start));
+        }
+        const jumbo = match.start == 0 && match.end == text.length;
+        elementChildren.push(
+          <EmojiInline text={match.emoji} jumbo={jumbo} key={`range-${i++}`} />
+        );
+        last = match.end;
+      }
+
+      if (last < elementText.length) {
+        elementChildren.push(elementText.substring(last));
+      }
+
+      var element: JSX.Element = <>{elementChildren}</>;
       for (const type of range.styles) {
         const rule = ruleMap[type];
         if (rule === undefined) {
           continue;
         }
-        element = rule.html(element, lookups);
+        element = (
+          <rule.html
+            lookups={lookups}
+            params={{ language: lang }}
+            key={`range-${i++}`}
+          >
+            {element}
+          </rule.html>
+        );
       }
 
       elements.push(element);

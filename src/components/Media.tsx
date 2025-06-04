@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   PiPlayFill,
   PiPauseFill,
+  PiWarningFill,
   PiArrowCounterClockwiseBold,
   PiCornersOutBold,
   PiCornersInBold,
@@ -55,6 +56,7 @@ export function VideoDisplay({
   const [isVolumeVisible, setIsVolumeVisible] = useState(false);
   const [isVolumeSliding, setIsVolumeSliding] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isErrored, setIsErrored] = useState(false);
   const [duration, setDuration] = useState(0);
   const [time, setTime] = useState(0);
   const [volume, setVolume] = useState(1);
@@ -489,14 +491,17 @@ export function VideoDisplay({
       }}
     >
       {!isLoaded && <img src={preload} />}
-      {
+      {(isLoaded || !isErrored) && (
         <img
           src={poster}
           onLoad={() => {
             setIsLoaded(true);
           }}
+          onError={() => {
+            setIsErrored(true);
+          }}
         />
-      }
+      )}
       {isLoaded && (
         <>
           <video
@@ -509,7 +514,7 @@ export function VideoDisplay({
             }}
             onPlay={() => {
               if (isSeeking) return;
-              //console.log("PLAY");
+              console.log("PLAY");
               setIsEnded(false);
               setIsPlaying(true);
             }}
@@ -549,6 +554,9 @@ export function VideoDisplay({
             onVolumeChange={() => {
               setVolume(videoRef.current!.volume);
             }}
+            onError={(e) => {
+              setIsErrored(true);
+            }}
           />
 
           <div
@@ -562,31 +570,48 @@ export function VideoDisplay({
             {!isPlaying && <PiPauseFill className="video-overlay-icon" />}
           </div>
 
-          <div
-            className={"video-cover" + (!isShowing ? " clickable" : "")}
-            onClick={() => {
-              if (!isShowing) {
-                const shouldShow = onClick();
-                if (!shouldShow) return;
+          {!isErrored && (
+            <>
+              <div
+                className={
+                  "video-cover" +
+                  (!isShowing ? " clickable" : "") +
+                  (isErrored ? " error" : "")
+                }
+                onClick={() => {
+                  if (isErrored) return;
 
-                videoRef.current!.volume = globalVolume;
-                setIsShowing(true);
-                videoRef.current?.play();
-                return;
-              }
+                  if (!isShowing) {
+                    const shouldShow = onClick();
+                    if (!shouldShow) return;
 
-              if (videoRef.current?.paused) {
-                videoRef.current?.play();
-              } else {
-                videoRef.current?.pause();
-              }
-            }}
-          >
-            {!isShowing && <PiPlayFill className="video-cover-icon play" />}
-            {isShowing && isPlaying && isWaiting && loader}
-          </div>
-          {isShowing && controls}
+                    videoRef.current!.volume = globalVolume;
+                    setIsShowing(true);
+                    videoRef.current?.play();
+                    return;
+                  }
+
+                  if (videoRef.current?.paused) {
+                    videoRef.current?.play();
+                  } else {
+                    videoRef.current?.pause();
+                  }
+                }}
+              >
+                {!isShowing && <PiPlayFill className="video-cover-icon play" />}
+                {isShowing && isPlaying && isWaiting && loader}
+              </div>
+
+              {isShowing && controls}
+            </>
+          )}
         </>
+      )}
+
+      {isErrored && (
+        <div className="media-error">
+          <PiWarningFill className="media-error-icon" />
+        </div>
       )}
     </div>
   );
@@ -602,9 +627,10 @@ export function ImageDisplay({
   onClick: () => void;
 }) {
   const [isLoaded, setIsLoaded] = useState(false);
+  const [isErrored, setIsErrored] = useState(false);
 
   useEffect(() => {
-    setIsLoaded(false);
+    //setIsLoaded(false);
   }, [src]);
 
   return (
@@ -621,11 +647,19 @@ export function ImageDisplay({
           onLoad={() => {
             setIsLoaded(true);
           }}
+          onError={() => {
+            setIsErrored(true);
+          }}
           style={{
             opacity: isLoaded ? 1 : 0,
           }}
         />
       }
+      {isErrored && (
+        <div className="media-error">
+          <PiWarningFill className="media-error-icon" />
+        </div>
+      )}
     </div>
   );
 }

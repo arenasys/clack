@@ -43,6 +43,7 @@ export function Input() {
   const editorRef = useRef<{
     clear: () => void;
     complete: (word: string, completion: string) => void;
+    insert: (text: string) => void;
   }>();
   const autocompleteRef = useRef<{
     setWord: (word: string) => void;
@@ -59,6 +60,24 @@ export function Input() {
   const setAttachments = useChatState((state) => state.setAttachments);
   const attaching = useChatState(
     (state) => state.gateway.currentFiles.length > 0
+  );
+  function addFiles(files: File[]) {
+    const newFiles = files.map((file) => {
+      return {
+        id: MakeSnowflake(),
+        file: file,
+        filename: file.name,
+        spoilered: false,
+        type: GetFileType(file),
+        blobURL: "",
+      };
+    });
+
+    setAttachments(newFiles, [], []);
+  }
+
+  const setEmojiPickerPopup = useChatState(
+    (state) => state.setEmojiPickerPopup
   );
 
   useEffect(() => {
@@ -78,8 +97,6 @@ export function Input() {
     <MarkdownTextbox
       ref={editorRef}
       onValue={(text: string, cursor: number) => {
-        console.log("TEXT", text);
-
         if (cursor == -1) {
           autocompleteRef.current?.setWord("");
         } else {
@@ -91,7 +108,7 @@ export function Input() {
           }
         }
 
-        setPlaintext(text);
+        setPlaintext(text.trim());
       }}
     />
   );
@@ -108,18 +125,7 @@ export function Input() {
           className="input-button clickable-button"
           onClick={() => {
             ChooseFiles().then((files) => {
-              const newFiles = files.map((file) => {
-                return {
-                  id: MakeSnowflake(),
-                  file: file,
-                  filename: file.name,
-                  spoilered: false,
-                  type: GetFileType(file),
-                  blobURL: "",
-                };
-              });
-
-              setAttachments(newFiles, [], []);
+              addFiles(files);
             });
           }}
         >
@@ -168,10 +174,33 @@ export function Input() {
               }
             }
           }}
+          onPaste={(e) => {
+            if (e.clipboardData.files.length !== 0) {
+              addFiles(Array.from(e.clipboardData.files));
+            }
+          }}
         >
           {editor}
         </div>
-        <button className="input-button clickable-button">
+        <button
+          className="input-button clickable-button"
+          onClick={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+
+            setEmojiPickerPopup({
+              position: {
+                x: rect.right,
+                y: rect.top - 10,
+              },
+              direction: "top",
+              onPick: (emoji: string) => {
+                if (editorRef.current) {
+                  editorRef.current.insert(emoji + " ");
+                }
+              },
+            });
+          }}
+        >
           <RiEmotionFill className="input-icon" />
         </button>
       </div>
