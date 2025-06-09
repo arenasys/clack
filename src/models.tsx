@@ -13,13 +13,14 @@ export interface Message {
   author: Snowflake;
   reference?: Snowflake;
   content: string;
-  edited_timestamp?: number;
+  editedTimestamp?: number;
   attachments?: Attachment[];
   embeds?: Embed[];
   reactions?: Reaction[];
-  mentioned_users?: Snowflake[];
-  mentioned_roles?: Snowflake[];
-  mentioned_channels?: Snowflake[];
+  mentionedUsers?: Snowflake[];
+  mentionedRoles?: Snowflake[];
+  mentionedChannels?: Snowflake[];
+  embeddableURLs?: string[];
 }
 
 export const enum UserStatus {
@@ -45,8 +46,7 @@ export interface Role {
   name: string;
   color: number;
   position: number;
-  allow: number;
-  deny: number;
+  permissions: number;
   hoisted: boolean;
   mentionable: boolean;
 }
@@ -212,4 +212,6 @@ export const enum Permissions {
   ManageChannels = 1 << 15,
   ManageRoles = 1 << 16,
   ManageEmojis = 1 << 17,
+
+  All = 0x7fffffff,
 }

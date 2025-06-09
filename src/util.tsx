@@ -65,7 +65,7 @@ export function StringSearchScore(
   return score;
 }
 
-export function BoundingBox(
+export function isInsideRect(
   x: number,
   y: number,
   rect: { x: number; y: number; width: number; height: number }
@@ -78,6 +78,21 @@ export function BoundingBox(
   );
 }
 
+export function isInsideSelection(e: {
+  clientX: number;
+  clientY: number;
+}): boolean {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) return false;
+
+  const range = selection.getRangeAt(0);
+  const rect = range.getBoundingClientRect();
+
+  console.log("SELECTION RECT", rect, e);
+
+  return isInsideRect(e.clientX, e.clientY, rect);
+}
+
 export function FormatDateTime(date: Date) {
   if (isToday(date)) {
     return `Today at ${format(date, "h:mm a")}`;
@@ -86,6 +101,10 @@ export function FormatDateTime(date: Date) {
   } else {
     return format(date, "M/d/yy, h:mm a");
   }
+}
+
+export function FormatDateTimeLong(date: Date) {
+  return format(date, "EEEE, MMMM do, y 'at' h:mm a");
 }
 
 export function FormatTime(date: Date) {

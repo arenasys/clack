@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import { useChatState, useChatStateShallow } from "../../state";
 import { GatewayAuthState } from "../../gateway";
 
-export default function LoadingLayer() {
+export default function LoadingScreen() {
   const isLoading = useChatState((state) => {
     if (state.gateway.authState == GatewayAuthState.Disconnected) return true;
 

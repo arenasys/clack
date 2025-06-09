@@ -1,14 +1,11 @@
 import React, { useEffect, useRef } from "react";
 import { Range, Point, Path, Descendant, last } from "slate";
 
-import { FindEmojis, EmojiInline } from "./emoji";
+import { FindEmojis, EmojiInline, EmojiInlineExternal } from "./emoji";
 import { GetChatStateLookups, ChatStateLookups } from "./state";
 import { FormatColor } from "./util";
 
 import hljs from "highlight.js";
-
-//import "highlight.js/styles/github-dark-dimmed.min.css";
-//import "highlight.js/styles/atom-one-dark-reasonable.min.css";
 
 export enum SyntaxStyle {
   CodeBlock = "codeblock",
@@ -382,7 +379,7 @@ export const userMentionRule: SyntaxRule = {
                 id: user.id,
                 user: user,
                 position: {
-                  x: rect.right + 16,
+                  x: rect.right + 8,
                   y: rect.top,
                 },
                 direction: "right",
@@ -762,13 +759,9 @@ export function GetMatches(
   return matches;
 }
 
-export function SyntaxContent({
-  text,
-  lookups,
-}: {
-  text: string;
-  lookups: ChatStateLookups;
-}) {
+export function SyntaxContent({ text }: { text: string }) {
+  const lookups = GetChatStateLookups();
+
   var ranges: SyntaxRange[] = ParseRanges(text, [], fullRuleOrdering);
 
   var elements = [];
@@ -827,4 +820,25 @@ export function SyntaxContent({
   );
 
   return ret;
+}
+
+export function EmojiContent({ text }: { text: string }) {
+  var children: (JSX.Element | string)[] = [];
+  var last = 0;
+  var i = 0;
+  for (const match of FindEmojis(text)) {
+    if (match.start > last) {
+      children.push(text.substring(last, match.start));
+    }
+    children.push(
+      <EmojiInlineExternal text={match.emoji} key={`range-${i++}`} />
+    );
+    last = match.end;
+  }
+
+  if (last < text.length) {
+    children.push(text.substring(last));
+  }
+
+  return <>{children}</>;
 }

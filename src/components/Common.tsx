@@ -10,7 +10,6 @@ import {
 
 import { useChatState, useChatStateShallow } from "../state";
 import { GetTooltipPosition } from "../util";
-import { wrap } from "underscore";
 
 export function IconButton({
   children,
@@ -85,14 +84,14 @@ export function IconButton({
 export function TooltipWrapper({
   children,
   tooltip,
-  tooltipDirection = "top",
-  tooltipDelay = 0,
+  direction = "top",
+  delay = 0,
   className = "",
 }: {
   children?: any;
   tooltip: string;
-  tooltipDelay?: number;
-  tooltipDirection?: "top" | "bottom" | "left" | "right";
+  delay?: number;
+  direction?: "top" | "bottom" | "left" | "right";
   className?: string;
 }) {
   const ref = useRef<HTMLSpanElement>(null);
@@ -110,8 +109,8 @@ export function TooltipWrapper({
 
     const index = setTooltipPopup({
       content: tooltip,
-      direction: tooltipDirection,
-      position: GetTooltipPosition(rect, tooltipDirection),
+      direction: direction,
+      position: GetTooltipPosition(rect, direction),
     });
     tooltipIndexRef.current = index;
   }
@@ -127,7 +126,7 @@ export function TooltipWrapper({
       window.clearTimeout(tooltipTimeout.current);
     }
     if (isHovered) {
-      tooltipTimeout.current = window.setTimeout(setTooltip, tooltipDelay);
+      tooltipTimeout.current = window.setTimeout(setTooltip, delay);
     } else {
       clearTooltip();
     }
@@ -167,7 +166,7 @@ export function ClickWrapper({
 }: {
   passthrough?: boolean;
   children: ReactNode;
-  onClick: (e: PointerEvent) => void;
+  onClick: () => void;
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const pointerDowned = useRef(false);
@@ -188,20 +187,37 @@ export function ClickWrapper({
 
     function onPointerDown(e: PointerEvent) {
       pointerDowned.current = isClickOnWrapper(e.clientX, e.clientY);
+
+      e.stopImmediatePropagation();
+      e.stopPropagation();
+      e.preventDefault();
     }
 
     function onPointerUp(e: PointerEvent) {
       if (pointerDowned.current && isClickOnWrapper(e.clientX, e.clientY)) {
-        requestAnimationFrame(() => onClick(e));
+        requestAnimationFrame(() => onClick());
       }
       pointerDowned.current = false;
     }
 
-    window.addEventListener("pointerdown", onPointerDown);
-    window.addEventListener("pointerup", onPointerUp);
+    function onContextMenu(e: MouseEvent) {
+      if (pointerDowned.current && isClickOnWrapper(e.clientX, e.clientY)) {
+        requestAnimationFrame(() => onClick());
+      }
+      pointerDowned.current = false;
+
+      e.stopImmediatePropagation();
+      e.stopPropagation();
+      e.preventDefault();
+    }
+
+    window.addEventListener("pointerdown", onPointerDown, true);
+    window.addEventListener("pointerup", onPointerUp, true);
+    window.addEventListener("contextmenu", onContextMenu, true);
     return () => {
-      window.removeEventListener("pointerdown", onPointerDown);
-      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointerdown", onPointerDown, true);
+      window.removeEventListener("pointerup", onPointerUp, true);
+      window.removeEventListener("contextmenu", onContextMenu, true);
     };
   }, [onClick]);
 

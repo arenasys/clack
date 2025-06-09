@@ -9,7 +9,7 @@ import { Modal, ModalHandle } from "../../Common";
 
 const mod = (n: number, m: number) => ((n % m) + m) % m;
 
-export default function ViewerLayer() {
+export default function ViewerModal() {
   const modalRef = useRef<ModalHandle>(null);
   const viewerModal = useChatState((state) => state.viewerModal);
   const setViewerModal = useChatState((state) => state.setViewerModal);

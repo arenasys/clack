@@ -7,7 +7,7 @@ import { AttachmentType } from "../../../models";
 import { ClickWrapper, Modal, ModalHandle } from "../../Common";
 import { set } from "date-fns";
 
-export default function AttachmentLayer() {
+export default function AttachmentModal() {
   const modalRef = useRef<ModalHandle>(null);
 
   const attachmentModal = useChatState((state) => state.attachmentModal);

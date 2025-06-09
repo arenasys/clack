@@ -13,7 +13,7 @@ import {
   ChannelType,
 } from "./models";
 import { EmojiSearchByPartialName } from "./emoji";
-import { StringSearchScore } from "./util";
+import { ErrorResponse } from "./events";
 
 import fuzzysort from "fuzzysort";
 
@@ -47,8 +47,17 @@ export interface AttachmentModalState {
 
 export interface MessageContextMenuState {
   messageId: Snowflake;
-  direction: "right" | "right-top";
+  direction: "right";
   position: { x: number; y: number };
+  static: boolean;
+}
+
+export interface MessageDeleteModalState {
+  messageId: Snowflake;
+}
+
+export interface ErrorModalState {
+  error: ErrorResponse;
 }
 
 export interface InputStates {
@@ -74,6 +83,8 @@ export interface ChatState {
   contextMenuPopup?: MessageContextMenuState;
   viewerModal?: ViewerModalState;
   attachmentModal?: AttachmentModalState;
+  messageDeleteModal?: MessageDeleteModalState;
+  errorModal?: ErrorModalState;
   showingUserList: boolean;
 
   // Net
@@ -96,6 +107,8 @@ export interface ChatState {
   // Actions
   changeChannel: (channel: string) => void;
   sendMessage: (content: string) => void;
+  updateMessage: (message: Snowflake, content: string) => void;
+  deleteMessage: (message: Snowflake) => void;
   cancelMessage: (message: Snowflake) => void;
   setChatScroll: (top: string, center: string, bottom: string) => void;
   setUserScroll: (
@@ -115,6 +128,10 @@ export interface ChatState {
   setAttachmentModal: (
     attachmentModal: AttachmentModalState | undefined
   ) => void;
+  setMessageDeleteModal: (
+    messageDeleteModal: MessageDeleteModalState | undefined
+  ) => void;
+  setErrorModal: (errorModal: ErrorModalState | undefined) => void;
   setShowingUserList: (showingMemberList: boolean) => void;
   setEditorState: (state: string) => void;
   setAttachments: (
@@ -174,6 +191,20 @@ export const useChatState = create<ChatState>()((set) => {
       set(
         produce((state: ChatState) => {
           state.gateway.sendMessage(content);
+          state.update(state);
+        })
+      ),
+    updateMessage: (message, content) =>
+      set(
+        produce((state: ChatState) => {
+          state.gateway.updateMessage(message, content);
+          state.update(state);
+        })
+      ),
+    deleteMessage: (message) =>
+      set(
+        produce((state: ChatState) => {
+          state.gateway.deleteMessage(message);
           state.update(state);
         })
       ),
@@ -263,6 +294,18 @@ export const useChatState = create<ChatState>()((set) => {
       set(
         produce((state: ChatState) => {
           state.attachmentModal = attachmentModal;
+        })
+      ),
+    setMessageDeleteModal: (messageDeleteModal) =>
+      set(
+        produce((state: ChatState) => {
+          state.messageDeleteModal = messageDeleteModal;
+        })
+      ),
+    setErrorModal: (errorModal) =>
+      set(
+        produce((state: ChatState) => {
+          state.errorModal = errorModal;
         })
       ),
     setShowingUserList: (showingUserList) =>
@@ -507,6 +550,12 @@ export const useChatState = create<ChatState>()((set) => {
       if (state.gateway.requests.length > 0) {
         state.requests.push(...state.gateway.requests);
         state.gateway.requests = [];
+      }
+      if (state.gateway.error) {
+        state.errorModal = {
+          error: state.gateway.error,
+        };
+        state.gateway.error = undefined;
       }
       state._u++;
     },

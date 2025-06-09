@@ -9,12 +9,13 @@ import { EventType, MessageSendRequest } from "../events";
 
 import { Attachments } from "./Attachments";
 
-import { Autocomplete } from "./Autocomplete";
+import { Autocomplete, AutocompleteRef } from "./Autocomplete";
 
 import { ChooseFiles, GetFileType, MakeSnowflake } from "../util";
 
-import MarkdownTextbox from "./Input";
+import { MarkdownTextbox, MarkdownTextboxRef } from "./Input";
 import List from "./List";
+import { Descendant } from "slate";
 
 export function Chat() {
   const messageView = useChatState((state) => state.gateway.currentMessages);
@@ -39,20 +40,9 @@ export function Chat() {
 export function Input() {
   const [submit, setSubmit] = useState(0);
   const [plaintext, setPlaintext] = useState("");
-  const textboxRef = useRef<HTMLDivElement>(null);
-  const editorRef = useRef<{
-    clear: () => void;
-    complete: (word: string, completion: string) => void;
-    insert: (text: string) => void;
-  }>();
-  const autocompleteRef = useRef<{
-    setWord: (word: string) => void;
-    selectUp: () => void;
-    selectDown: () => void;
-    showing: () => boolean;
-    completable: () => boolean;
-    complete: () => void;
-  }>();
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const textboxRef = useRef<MarkdownTextboxRef>();
+  const autocompleteRef = useRef<AutocompleteRef>();
 
   const currentChannel = useChatState((state) => state.gateway.currentChannel);
   const sendMessage = useChatState((state) => state.sendMessage);
@@ -81,34 +71,50 @@ export function Input() {
   );
 
   useEffect(() => {
-    editorRef.current?.clear();
+    textboxRef.current?.clear();
   }, [submit]);
 
   const autocomplete = (
     <Autocomplete
       ref={autocompleteRef}
-      onSumbit={(word, completion) => {
-        editorRef.current?.complete(word, completion);
+      onComplete={(word: string, completion: string) => {
+        if (textboxRef.current) {
+          textboxRef.current.complete(word, completion);
+        }
       }}
     />
   );
 
+  const currentChanneName = useChatStateShallow((state) => {
+    const c = state.gateway.currentChannel;
+    if (c === undefined) return "unknown";
+    return state.gateway.channels.get(c)!.name;
+  });
+
+  const currentEditorState = useChatState(
+    (state) => state.gateway.currentEditor
+  );
+  const setEditorState = useChatState((state) => {
+    return state.setEditorState;
+  });
+
+  useEffect(() => {
+    if (textboxRef.current) {
+      const state = (
+        currentEditorState == "" ? [] : JSON.parse(currentEditorState)
+      ) as Descendant[];
+      textboxRef.current.setValue(state);
+    }
+  }, [currentChannel]);
+
   const editor = (
     <MarkdownTextbox
-      ref={editorRef}
-      onValue={(text: string, cursor: number) => {
-        if (cursor == -1) {
-          autocompleteRef.current?.setWord("");
-        } else {
-          const currentWord = text.slice(0, cursor).split(/\s|>/g).pop();
-          if (currentWord === undefined) {
-            autocompleteRef.current?.setWord("");
-          } else {
-            autocompleteRef.current?.setWord(currentWord);
-          }
-        }
-
+      ref={textboxRef}
+      placeholder={`Message #${currentChanneName}`}
+      onValue={(text: string, cursor: number, value: Descendant[]) => {
+        autocompleteRef.current?.onValue(text, cursor);
         setPlaintext(text.trim());
+        setEditorState(JSON.stringify(value));
       }}
     />
   );
@@ -132,37 +138,10 @@ export function Input() {
           <RiAddCircleFill className="input-icon" />
         </button>
         <div
-          ref={textboxRef}
+          ref={wrapperRef}
           id="textbox"
           onKeyDown={(event) => {
-            const autocomplete = autocompleteRef.current;
-            if (autocomplete && autocomplete.showing()) {
-              if (event.key === "ArrowUp") {
-                event.preventDefault();
-                autocomplete.selectUp();
-                return;
-              } else if (event.key === "ArrowDown") {
-                event.preventDefault();
-                autocomplete.selectDown();
-                return;
-              } else if (event.key === "Tab" && autocomplete.completable()) {
-                event.preventDefault();
-                autocomplete.complete();
-                return;
-              } else if (
-                event.key === "Enter" &&
-                !event.shiftKey &&
-                autocomplete.completable()
-              ) {
-                event.preventDefault();
-                autocomplete.complete();
-                return;
-              } else if (event.key === "Escape") {
-                event.preventDefault();
-                autocomplete.setWord("");
-                return;
-              }
-            }
+            if (autocompleteRef.current?.onKeyDown(event)) return;
 
             if (event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();
@@ -194,8 +173,8 @@ export function Input() {
               },
               direction: "top",
               onPick: (emoji: string) => {
-                if (editorRef.current) {
-                  editorRef.current.insert(emoji + " ");
+                if (textboxRef.current) {
+                  textboxRef.current.insert(emoji + " ");
                 }
               },
             });

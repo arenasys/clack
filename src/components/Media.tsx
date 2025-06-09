@@ -153,12 +153,11 @@ export function VideoDisplay({
       controlsTimeout.current = null;
     }
 
-    if (!hide) return;
-
+    const timeout = hide ? 150 : 4000;
     controlsTimeout.current = window.setTimeout(() => {
       controlsTimeout.current = null;
       setIsShowingControls(false);
-    }, 150);
+    }, timeout);
   }
 
   const onSeekMouseUp = (e: MouseEvent) => {
@@ -480,7 +479,7 @@ export function VideoDisplay({
       onMouseLeave={() => {
         doHideControls(true);
       }}
-      onMouseEnter={() => {
+      onMouseMove={() => {
         doHideControls(false);
         setIsShowingControls(true);
       }}
@@ -490,8 +489,8 @@ export function VideoDisplay({
         }
       }}
     >
-      {!isLoaded && <img src={preload} />}
-      {(isLoaded || !isErrored) && (
+      {!isLoaded && !isFullscreen && <img src={preload} />}
+      {(isLoaded || !isErrored) && !isFullscreen && (
         <img
           src={poster}
           onLoad={() => {

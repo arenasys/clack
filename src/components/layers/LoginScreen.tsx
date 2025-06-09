@@ -33,11 +33,11 @@ function Register() {
   });
 
   const usesEmail = useChatState((state) => {
-    return state.gateway.site!.usesEmail;
+    return state.gateway.settings!.usesEmail;
   });
 
   const usesInviteCodes = useChatState((state) => {
-    return state.gateway.site!.usesInviteCodes;
+    return state.gateway.settings!.usesInviteCodes;
   });
 
   useEffect(() => {
@@ -192,11 +192,11 @@ function Login() {
   });
 
   const siteName = useChatState((state) => {
-    return state.gateway.site!.siteName;
+    return state.gateway.settings!.siteName;
   });
 
   const loginMessage = useChatState((state) => {
-    return state.gateway.site!.loginMessage;
+    return state.gateway.settings!.loginMessage;
   });
 
   useEffect(() => {
@@ -289,7 +289,7 @@ function Login() {
   );
 }
 
-export default function LoginLayer() {
+export default function LoginScreen() {
   const state = useChatStateShallow((state) => {
     return state.gateway.authState;
   });

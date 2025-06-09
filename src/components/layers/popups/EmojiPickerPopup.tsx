@@ -8,7 +8,7 @@ import { BiSearch } from "react-icons/bi";
 
 import { ClickWrapper, IconButton } from "../../Common";
 
-import { BoundingBox } from "../../../util";
+import { isInsideRect } from "../../../util";
 
 import {
   RiEmotionFill,
@@ -182,7 +182,7 @@ function EmojiPickerBody({
   );
 }
 
-export default function EmojiPickerPopupLayer() {
+export default function EmojiPickerPopup() {
   const listRef = useRef<VListHandle>(null);
   const listData = useRef<(string | EmojiEntry[])[]>([]);
   const [firstLoad, setFirstLoad] = useState<boolean>(true);
@@ -394,13 +394,13 @@ export default function EmojiPickerPopupLayer() {
   function onMouseDown(e: MouseEvent) {
     if (showingToneList && toneListRef.current) {
       var rect = toneListRef.current.getBoundingClientRect();
-      if (!BoundingBox(e.clientX, e.clientY, rect)) {
+      if (!isInsideRect(e.clientX, e.clientY, rect)) {
         setShowingToneList(false);
       }
     }
     if (showingMultiToneList && multiToneListRef.current) {
       var rect = multiToneListRef.current.getBoundingClientRect();
-      if (!BoundingBox(e.clientX, e.clientY, rect)) {
+      if (!isInsideRect(e.clientX, e.clientY, rect)) {
         if (e.buttons !== 2) {
           setMultiToneTarget(undefined);
         }

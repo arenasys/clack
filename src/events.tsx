@@ -2,61 +2,10 @@ import { Channel, Message, Role, User } from "./models";
 
 export type Snowflake = string;
 
-/*
-const (
-	EventTypeErrorResponse = iota
-
-	EventTypeSiteResponse     = iota
-	EventTypeOverviewResponse = iota
-
-	EventTypeMessagesRequest  = iota
-	EventTypeMessagesResponse = iota
-
-	EventTypeUsersRequest  = iota
-	EventTypeUsersResponse = iota
-
-	EventTypeUserListRequest  = iota
-	EventTypeUserListResponse = iota
-
-	EventTypeMessageSendRequest  = iota
-	EventTypeMessageSendResponse = iota
-	
-	EventTypeMessageAdd          = iota
-	EventTypeMessageUpdate       = iota
-	EventTypeMessageDelete       = iota
-	EventTypeMessageDeleteBulk   = iota
-
-	EventTypeMessageReactionAdd         = iota
-	EventTypeMessageReactionRemove      = iota
-	EventTypeMessageReactionRemoveAll   = iota
-	EventTypeMessageReactionRemoveEmoji = iota
-
-	EventTypeChannelAdd        = iota
-	EventTypeChannelUpdate     = iota
-	EventTypeChannelDelete     = iota
-	EventTypeChannelPinsUpdate = iota
-
-	EventTypeRoleAdd    = iota
-	EventTypeRoleUpdate = iota
-	EventTypeRoleDelete = iota
-
-	EventTypeUserAdd    = iota
-	EventTypeUserRemove = iota
-	EventTypeUserUpdate = iota
-
-	EventTypeUserPresence = iota
-	EventTypeUserTyping   = iota
-
-	EventTypeLoginRequest    = iota
-	EventTypeTokenResponse   = iota
-	EventTypeLogoutRequest   = iota
-	EventTypeRegisterRequest = iota
-)*/
-
 export const enum EventType {
   ErrorResponse = 0,
 
-  SiteResponse = 1,
+  SettingsResponse = 1,
   OverviewResponse = 2,
 
   MessagesRequest = 3,
@@ -103,6 +52,13 @@ export const enum EventType {
   RegisterRequest = 34,
 }
 
+export const EventTypeDescriptions: { [key: number]: string } = {
+  [EventType.MessageSendRequest]: "send messages",
+  [EventType.MessagesRequest]: "fetch messages",
+  [EventType.MessageDelete]: "delete this message",
+  [EventType.MessageDeleteBulk]: "delete messages in bulk",
+};
+
 export const enum ErrorCode {
   InternalError = 0,
   InvalidRequest = 1,
@@ -112,7 +68,8 @@ export const enum ErrorCode {
   TakenUsername = 5,
   InvalidInviteCode = 6,
   InvalidCaptcha = 7,
-  ConnectionClosing = 8,
+  NoPermission = 8,
+  ConnectionClosing = 9,
 }
 
 export const ErrorCodeMessages: { [key: number]: string } = {
@@ -124,17 +81,20 @@ export const ErrorCodeMessages: { [key: number]: string } = {
   [ErrorCode.TakenUsername]: "Username already taken.",
   [ErrorCode.InvalidInviteCode]: "Invalid invite code.",
   [ErrorCode.InvalidCaptcha]: "Invalid captcha.",
+  [ErrorCode.NoPermission]: "Insufficient permissions to perform this action.",
   [ErrorCode.ConnectionClosing]: "Connection closing.",
 };
 
 export interface ErrorResponse {
   code: number;
-  message: string;
+  request: number;
+  message?: string;
 }
 
-export interface SiteResponse {
+export interface SettingsResponse {
   siteName: string;
   loginMessage: string;
+  defaultPermissions: number;
   authenticated: boolean;
   usesEmail: boolean;
   usesInviteCodes: boolean;
@@ -207,9 +167,26 @@ export interface MessageSendResponse {
   slot?: Snowflake;
 }
 
+export interface MessgeUpdateRequest {
+  message: Snowflake;
+  content?: string;
+}
+
+export interface MessageDeleteRequest {
+  message: Snowflake;
+}
+
+export interface MessageDeleteEvent {
+  message: Snowflake;
+}
+
 export interface MessageAddEvent {
   message: Message;
   author: User;
+}
+
+export interface MessageUpdateEvent {
+  message: Message;
 }
 
 export interface LoginRequest {

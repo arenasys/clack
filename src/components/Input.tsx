@@ -570,52 +570,29 @@ const withCustom = (
   return editor;
 };
 
-const MarkdownTextbox = forwardRef(function MarkdownTextbox(
-  { onValue }: { onValue: (text: string, cursor: number) => void },
+export interface MarkdownTextboxRef {
+  clear: () => void;
+  complete: (word: string, completion: string) => void;
+  insert: (text: string) => void;
+  setValue: (value: Descendant[]) => void;
+}
+
+export const MarkdownTextbox = forwardRef(function MarkdownTextbox(
+  {
+    value,
+    placeholder,
+    onValue,
+  }: {
+    value?: string | Descendant[];
+    placeholder?: string;
+    onValue: (text: string, cursor: number, value: Descendant[]) => void;
+  },
   ref
 ) {
-  const setEditorState = useChatState((state) => {
-    return state.setEditorState;
-  });
-
-  const currentChannel = useChatState((state) => {
-    return state.gateway.currentChannel;
-  });
-
-  const currentChanneName = useChatState((state) => {
-    if (state.gateway.currentChannel === undefined) return "unknown";
-    return state.gateway.channels.get(state.gateway.currentChannel)!.name;
-  });
-
   const lookups = GetChatStateLookups();
-
-  const currentEditor = useChatState((state) => state.gateway.currentEditor);
 
   const lastValue = useRef<string | undefined>(undefined);
   const cachedDecorations = useRef<SlateRange[] | undefined>(undefined);
-
-  function getValue(editor: string | undefined): Descendant[] {
-    var value: Descendant[] = [
-      {
-        type: "line",
-        children: [{ text: "" }],
-      },
-    ];
-
-    if (editor !== undefined && editor !== "") {
-      value = JSON.parse(editor);
-    }
-    return value;
-  }
-
-  const renderLeaf = useCallback(
-    (props: RenderLeafProps) => <CustomLeaf {...props} />,
-    []
-  );
-  const renderElement = useCallback(
-    (props: RenderElementProps) => <CustomElement {...props} editor={editor} />,
-    []
-  );
 
   useImperativeHandle(ref, () => ({
     clear: () => {
@@ -637,11 +614,53 @@ const MarkdownTextbox = forwardRef(function MarkdownTextbox(
     insert: (text: string) => {
       Transforms.insertText(editor, text);
     },
+    setValue: (value: Descendant[]) => {
+      console.log("SET VALUE", value);
+      setValue(value);
+    },
   }));
 
   const editor = useMemo(() => {
     return withCustom(withHistory(withReact(createEditor())), lookups);
   }, []);
+
+  function getInitialValue(): Descendant[] {
+    var v: Descendant[] = [];
+
+    if (Array.isArray(value)) {
+      v = value;
+    } else {
+      v = [
+        {
+          type: "line",
+          children: [{ text: value ?? "" }],
+        },
+      ];
+    }
+
+    /*if (json !== undefined && json !== "") {
+      v = JSON.parse(json);
+    }*/
+
+    if (editor.children.length === 0) {
+      editor.children = v;
+      editor.normalize({ force: true });
+      sendOnValue();
+      return editor.children;
+    }
+    return v;
+  }
+
+  console.log("HERE");
+
+  const renderLeaf = useCallback(
+    (props: RenderLeafProps) => <CustomLeaf {...props} />,
+    []
+  );
+  const renderElement = useCallback(
+    (props: RenderElementProps) => <CustomElement {...props} editor={editor} />,
+    []
+  );
 
   const decorate = useCallback(([node, path]: [any, any]) => {
     if (Element.isElement(node) && node.type === "line") {
@@ -685,11 +704,17 @@ const MarkdownTextbox = forwardRef(function MarkdownTextbox(
       cursor = cursorString.length;
     }
 
-    onValue(content, cursor);
+    onValue(content, cursor, editor.children);
   }
 
   function setValue(value: Descendant[]) {
-    //console.log("SET VALUE", value);
+    if (value.length === 0) {
+      value = getInitialValue();
+    }
+
+    if (JSON.stringify(editor.children) === JSON.stringify(value)) {
+      return;
+    }
 
     editor.children = value;
     editor.selection = null;
@@ -771,7 +796,7 @@ const MarkdownTextbox = forwardRef(function MarkdownTextbox(
     }
   };
 
-  useEffect(() => {
+  /*useEffect(() => {
     const newValue = getValue(currentEditor);
     if (
       JSON.stringify(editor.children) ===
@@ -780,7 +805,7 @@ const MarkdownTextbox = forwardRef(function MarkdownTextbox(
       return;
     }
     setValue(newValue);
-  }, [currentChannel]);
+  }, [currentChannel]);*/
 
   useEffect(() => {
     sendOnValue();
@@ -789,7 +814,7 @@ const MarkdownTextbox = forwardRef(function MarkdownTextbox(
   return (
     <Slate
       editor={editor}
-      initialValue={getValue(currentEditor)}
+      initialValue={getInitialValue()}
       onChange={(value) => {
         // prevent the selection from being set inside an emoji (can happen when merging nodes etc)
         if (isInsideInline(editor)) {
@@ -806,7 +831,7 @@ const MarkdownTextbox = forwardRef(function MarkdownTextbox(
           cachedDecorations.current = undefined;
         }
 
-        setEditorState(valueString);
+        //setEditorState(valueString);
         sendOnValue();
       }}
       onSelectionChange={(selection) => {}}
@@ -815,7 +840,7 @@ const MarkdownTextbox = forwardRef(function MarkdownTextbox(
         decorate={decorate}
         renderElement={renderElement}
         renderLeaf={renderLeaf}
-        placeholder={`Message #${currentChanneName}`}
+        placeholder={placeholder ?? ""}
         onKeyDown={onKeyDown}
         onCopy={(event) => {
           event.preventDefault();
@@ -999,4 +1024,3 @@ function CustomElement({
 
   return <span {...attributes}>{children}</span>;
 }
-export default MarkdownTextbox;

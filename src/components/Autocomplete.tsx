@@ -19,10 +19,17 @@ import { EmojiEntry, EmojiInline, EmojiLookupSymbol } from "../emoji";
 
 import { UserAvatarSVG } from "./Users";
 
+export interface AutocompleteRef {
+  onKeyDown: (event: React.KeyboardEvent) => boolean;
+  onValue: (text: string, cursor: number) => void;
+}
+
 export const Autocomplete = forwardRef(function Autocomplete(
   {
-    onSumbit: onComplete,
-  }: { onSumbit: (word: string, completion: string) => void },
+    onComplete,
+  }: {
+    onComplete: (word: string, completion: string) => void;
+  },
   ref
 ) {
   const [word, setWord] = useState("");
@@ -171,37 +178,115 @@ export const Autocomplete = forwardRef(function Autocomplete(
     const l = getResultsLength();
     var n = i % l;
     if (n < 0) n += l;
-    console.log("INDEX", n, l);
     changeIndex(n, keyboard);
   }
 
+  function doSetWord(word: string) {
+    changeIndex(0, true);
+    setWord(word);
+    syncEmojiSearch(word);
+    syncMemberSearch(word);
+    syncChannelSearch(word);
+    scrollRef.current?.scrollTo(0, 0);
+  }
+
+  function doSelectUp() {
+    moveIndex(index - 1, true);
+  }
+
+  function doSelectDown() {
+    moveIndex(index + 1, true);
+  }
+
+  function isShowing(): boolean {
+    return getResultsLength() > 0;
+  }
+
+  function isCompletable(): boolean {
+    return getResultsLength() > 0 && index >= 0;
+  }
+
+  function doComplete(): void {
+    const completion = getSelectedCompletion();
+    if (completion.length > 0) {
+      onComplete(word, completion);
+    }
+  }
+
+  function onKeyDown(event: KeyboardEvent) {
+    var handled = false;
+    if (isShowing()) {
+      if (event.key === "ArrowUp") {
+        handled = true;
+        doSelectUp();
+      } else if (event.key === "ArrowDown") {
+        handled = true;
+        doSelectDown();
+      } else if (event.key === "Tab" && isCompletable()) {
+        handled = true;
+        doComplete();
+      } else if (event.key === "Enter" && !event.shiftKey && isCompletable()) {
+        handled = true;
+        doComplete();
+      } else if (event.key === "Escape") {
+        handled = true;
+        doSetWord("");
+      }
+    }
+
+    if (handled) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    return handled;
+  }
+
+  function doScrollTo(index: number, top: number, height: number) {
+    if (scrollRef.current) {
+      const scrollTop = scrollRef.current.scrollTop;
+      const scrollHeight = scrollRef.current.scrollHeight;
+      const clientHeight = scrollRef.current.clientHeight;
+      const padding = 8;
+
+      if (index == 0) {
+        scrollRef.current.scrollTo({
+          top: 0,
+          behavior: "instant",
+        });
+      } else if (index == getResultsLength() - 1) {
+        scrollRef.current.scrollTo({
+          top: scrollHeight - clientHeight,
+          behavior: "instant",
+        });
+      } else if (top < scrollTop) {
+        scrollRef.current.scrollTo({
+          top: top - padding,
+          behavior: "instant",
+        });
+      } else if (top + height > scrollTop + clientHeight) {
+        scrollRef.current.scrollTo({
+          top: top + height - clientHeight + padding,
+          behavior: "instant",
+        });
+      }
+    }
+  }
+
   useImperativeHandle(ref, () => ({
-    setWord(word: string) {
-      changeIndex(0, true);
-      setWord(word);
-      syncEmojiSearch(word);
-      syncMemberSearch(word);
-      syncChannelSearch(word);
-      scrollRef.current?.scrollTo(0, 0);
-    },
-    selectUp() {
-      moveIndex(index - 1, true);
-    },
-    selectDown() {
-      moveIndex(index + 1, true);
-    },
-    showing(): boolean {
-      return getResultsLength() > 0;
-    },
-    completable(): boolean {
-      return getResultsLength() > 0 && index >= 0;
-    },
-    complete(): void {
-      const completion = getSelectedCompletion();
-      if (completion.length > 0) {
-        onComplete(word, completion);
+    onValue(text: string, cursor: number) {
+      if (cursor == -1) {
+        doSetWord("");
+      } else {
+        const currentWord = text.slice(0, cursor).split(/\s|>/g).pop();
+        if (currentWord === undefined) {
+          doSetWord("");
+        } else {
+          doSetWord(currentWord);
+        }
       }
     },
+    onKeyDown: (event: KeyboardEvent) => onKeyDown(event),
   }));
 
   if (closed) {
@@ -230,7 +315,10 @@ export const Autocomplete = forwardRef(function Autocomplete(
               emoji={entry}
               index={i}
               selected={index == i}
-              jump={isKeyboard}
+              jump={(top, height) => {
+                if (!isKeyboard) return;
+                doScrollTo(i, top, height);
+              }}
               onMouseMove={() => {
                 if (index != i) changeIndex(i, false);
               }}
@@ -251,7 +339,10 @@ export const Autocomplete = forwardRef(function Autocomplete(
               user={result}
               index={i}
               selected={index == i}
-              jump={isKeyboard}
+              jump={(top, height) => {
+                if (!isKeyboard) return;
+                doScrollTo(i, top, height);
+              }}
               onMouseMove={() => {
                 if (index != i) changeIndex(i, false);
               }}
@@ -272,7 +363,10 @@ export const Autocomplete = forwardRef(function Autocomplete(
               _role={result}
               index={i}
               selected={index == i}
-              jump={isKeyboard}
+              jump={(top, height) => {
+                if (!isKeyboard) return;
+                doScrollTo(i, top, height);
+              }}
               onMouseMove={() => {
                 if (index != i) changeIndex(i, false);
               }}
@@ -292,7 +386,10 @@ export const Autocomplete = forwardRef(function Autocomplete(
               channel={result}
               index={i}
               selected={index == i}
-              jump={isKeyboard}
+              jump={(top, height) => {
+                if (!isKeyboard) return;
+                doScrollTo(i, top, height);
+              }}
               onMouseMove={() => {
                 if (index != i) changeIndex(i, false);
               }}
@@ -326,17 +423,13 @@ function AutocompleteEmoji({
   emoji: EmojiEntry;
   index: number;
   selected: boolean;
-  jump: boolean;
+  jump: (top: number, height: number) => void;
 } & React.HTMLProps<HTMLDivElement>) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (selected && ref.current && jump) {
-      ref.current.scrollIntoView({
-        behavior: "instant",
-        block: index == 0 ? "center" : "nearest",
-        inline: "start",
-      });
+    if (selected && ref.current) {
+      jump(ref.current.offsetTop, ref.current.offsetHeight);
     }
   }, [selected]);
 
@@ -364,17 +457,13 @@ function AutocompleteUser({
   user: User;
   index: number;
   selected: boolean;
-  jump: boolean;
+  jump: (top: number, height: number) => void;
 } & React.HTMLProps<HTMLDivElement>) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (selected && ref.current && jump) {
-      ref.current.scrollIntoView({
-        behavior: "instant",
-        block: index == 0 ? "center" : "nearest",
-        inline: "start",
-      });
+    if (selected && ref.current) {
+      jump(ref.current.offsetTop, ref.current.offsetHeight);
     }
   }, [selected]);
 
@@ -403,17 +492,13 @@ function AutocompleteRole({
   _role: Role;
   index: number;
   selected: boolean;
-  jump: boolean;
+  jump: (top: number, height: number) => void;
 } & React.HTMLProps<HTMLDivElement>) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (selected && ref.current && jump) {
-      ref.current.scrollIntoView({
-        behavior: "instant",
-        block: index == 0 ? "center" : "nearest",
-        inline: "start",
-      });
+    if (selected && ref.current) {
+      jump(ref.current.offsetTop, ref.current.offsetHeight);
     }
   }, [selected]);
 
@@ -446,17 +531,13 @@ function AutocompleteChannel({
   channel: Channel;
   index: number;
   selected: boolean;
-  jump: boolean;
+  jump: (top: number, height: number) => void;
 } & React.HTMLProps<HTMLDivElement>) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (selected && ref.current && jump) {
-      ref.current.scrollIntoView({
-        behavior: "instant",
-        block: index == 0 ? "center" : "nearest",
-        inline: "start",
-      });
+    if (selected && ref.current) {
+      jump(ref.current.offsetTop, ref.current.offsetHeight);
     }
   }, [selected]);
 

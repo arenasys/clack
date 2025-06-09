@@ -200,14 +200,14 @@ export function EmojiInline({
   const name = EmojiSymbolToName(text);
 
   return (
-    <TooltipWrapper
-      tooltip={`:${name}:`}
-      tooltipDirection="top"
-      tooltipDelay={500}
-    >
+    <TooltipWrapper tooltip={`:${name}:`} direction="top" delay={500}>
       <EmojiSVG symbol={text} className={jumbo ? "jumbo" : ""} />
     </TooltipWrapper>
   );
+}
+
+export function EmojiInlineExternal({ text }: { text: string }) {
+  return <EmojiSVG symbol={text} className={"external"} />;
 }
 
 export function EmojiSVG({

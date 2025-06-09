@@ -4,19 +4,19 @@ import You from "./You";
 import Channels from "./Channels";
 import Client from "./Client";
 import Header from "./Header";
-import AttachmentLayer from "./layers/modals/AttachmentModal";
-import ViewerLayer from "./layers/modals/ViewerModal";
-import TooltipPopupLayer from "./layers/popups/TooltipPopup";
-import ContextMenuPopupLayer from "./layers/popups/ContextMenuPopup";
-import UserPopupLayer from "./layers/popups/UserPopup";
-import EmojiPickerPopupLayer from "./layers/popups/EmojiPickerPopup";
-import LoadingLayer from "./layers/LoadingScreen";
-import LoginLayer from "./layers/LoginScreen";
-import CaptchaLayer from "./layers/CaptchaScreen";
+import AttachmentModal from "./layers/modals/AttachmentModal";
+import ViewerModal from "./layers/modals/ViewerModal";
+import DeleteMessageModal from "./layers/modals/DeleteMessageModal";
+import ErrorModal from "./layers/modals/ErrorModal";
+import TooltipPopup from "./layers/popups/TooltipPopup";
+import ContextMenuPopup from "./layers/popups/ContextMenuPopup";
+import UserPopup from "./layers/popups/UserPopup";
+import EmojiPickerPopup from "./layers/popups/EmojiPickerPopup";
+import LoadingScreen from "./layers/LoadingScreen";
+import LoginScreen from "./layers/LoginScreen";
+import CaptchaScreen from "./layers/CaptchaScreen";
 
 import { RiArrowDownSLine } from "react-icons/ri";
-
-import hljs from "highlight.js";
 
 function App() {
   return (
@@ -60,15 +60,17 @@ function App() {
           </div>
         </div>
       </div>
-      <AttachmentLayer />
-      <ViewerLayer />
-      <ContextMenuPopupLayer />
-      <UserPopupLayer />
-      <EmojiPickerPopupLayer />
-      <LoginLayer />
-      <CaptchaLayer />
-      <LoadingLayer />
-      <TooltipPopupLayer />
+      <AttachmentModal />
+      <ViewerModal />
+      <DeleteMessageModal />
+      <UserPopup />
+      <EmojiPickerPopup />
+      <ContextMenuPopup />
+      <LoginScreen />
+      <CaptchaScreen />
+      <LoadingScreen />
+      <ErrorModal />
+      <TooltipPopup />
     </>
   );
 }

@@ -1,5 +1,5 @@
 import { useChatState, useChatStateShallow } from "../../../state";
-export default function TooltipLayer() {
+export default function TooltipPopup() {
   const tooltipPopup = useChatState((state) => state.tooltipPopup);
   const setTooltipPopup = useChatState((state) => state.setTooltipPopup);
 

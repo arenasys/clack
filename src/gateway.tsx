@@ -7,12 +7,15 @@ import {
   ChannelType,
   AttachmentType,
   MessageType,
+  Permissions,
+  OverwriteType,
 } from "./models";
 
 import {
   EventType,
+  ErrorCode,
   ErrorResponse,
-  SiteResponse,
+  SettingsResponse,
   OverviewResponse,
   MessageSendRequest,
   MessagesRequest,
@@ -24,7 +27,9 @@ import {
   LoginRequest,
   RegisterRequest,
   TokenResponse,
+  MessageDeleteEvent,
   MessageAddEvent,
+  MessageUpdateEvent,
   MessageSendResponse,
 } from "./events";
 
@@ -354,6 +359,7 @@ export class Gateway {
 
   authState: GatewayAuthState = GatewayAuthState.Disconnected;
   authError: ErrorResponse | undefined = undefined;
+  error: ErrorResponse | undefined = undefined;
 
   requests: any[] = [];
   requestPendingCaptcha: any | undefined = undefined;
@@ -369,7 +375,7 @@ export class Gateway {
 
   userAnchor?: Snowflake = undefined;
 
-  site: SiteResponse | undefined;
+  settings: SettingsResponse | undefined;
 
   login(username: string, password: string) {
     this.switchAuthState(GatewayAuthState.TryLogin);
@@ -382,7 +388,7 @@ export class Gateway {
       type: EventType.LoginRequest,
       data: request,
     };
-    if (this.site?.usesLoginCaptcha) {
+    if (this.settings?.usesLoginCaptcha) {
       this.requestPendingCaptcha = event;
     } else {
       this.requests.push(event);
@@ -407,11 +413,64 @@ export class Gateway {
       type: EventType.RegisterRequest,
       data: request,
     };
-    if (this.site?.usesCaptcha) {
+    if (this.settings?.usesCaptcha) {
       this.requestPendingCaptcha = event;
     } else {
       this.requests.push(event);
     }
+  }
+
+  getPermissions(userID: Snowflake, channelID: Snowflake | undefined): number {
+    var allow = this.settings?.defaultPermissions ?? 0;
+    var deny = 0;
+
+    const user = this.users.get(userID);
+    if (!user) {
+      return 0;
+    }
+
+    for (const roleID of user.roles) {
+      const role = this.roles.get(roleID);
+      if (role) {
+        allow |= role.permissions;
+      }
+    }
+
+    if (channelID !== undefined) {
+      const channel = this.channels.get(channelID);
+      if (channel) {
+        for (const overwrite of channel.overwrites) {
+          if (overwrite.type === OverwriteType.Role) {
+            if (user.roles.includes(overwrite.id)) {
+              allow |= overwrite.allow;
+              deny |= overwrite.deny;
+            }
+          } else if (overwrite.type === OverwriteType.User) {
+            if (overwrite.id === userID) {
+              allow |= overwrite.allow;
+              deny |= overwrite.deny;
+            }
+          }
+        }
+      }
+    }
+
+    var permissions = allow & ~deny;
+
+    if ((permissions & Permissions.Administrator) != 0) {
+      return Permissions.All;
+    }
+
+    return permissions;
+  }
+
+  hasPermission(
+    userID: Snowflake,
+    channelID: Snowflake | undefined,
+    permission: Permissions
+  ): boolean {
+    const permissions = this.getPermissions(userID, channelID);
+    return (permissions & permission) === permission;
   }
 
   finishCaptcha(captchaResponse: string | undefined) {
@@ -441,6 +500,7 @@ export class Gateway {
 
     channels.forEach((channel) => {
       channel.parentName = this.channels.get(channel.parent)?.name;
+      channel.overwrites = channel.overwrites ?? [];
       this.channels.set(channel.id, channel);
     });
 
@@ -772,6 +832,29 @@ export class Gateway {
     this.syncCurrent(state);
   }
 
+  updateMessage(message: Snowflake, content: string) {
+    this.requests.push({
+      type: EventType.MessageUpdate,
+      data: {
+        message: message,
+        content: content,
+      },
+    });
+    this.pendingMessages.set(message, {
+      marker: message,
+      channel: "",
+    });
+  }
+
+  deleteMessage(message: Snowflake) {
+    this.requests.push({
+      type: EventType.MessageDelete,
+      data: {
+        message: message,
+      },
+    });
+  }
+
   onOverview(msg: OverviewResponse) {
     console.log("Overview", msg);
     this.roles.setRoles(msg.roles);
@@ -797,9 +880,9 @@ export class Gateway {
     this.switchAuthState(GatewayAuthState.Connected);
   }
 
-  onSite(msg: SiteResponse) {
+  onSettings(msg: SettingsResponse) {
     console.log("Site", msg);
-    this.site = msg;
+    this.settings = msg;
 
     if (msg.authenticated) {
       this.switchAuthState(GatewayAuthState.Loading);
@@ -825,11 +908,20 @@ export class Gateway {
   onError(msg: ErrorResponse) {
     if (this.authState == GatewayAuthState.TryLogin) {
       this.switchAuthState(GatewayAuthState.Login, msg);
+      return;
     }
 
     if (this.authState == GatewayAuthState.TryRegister) {
       this.switchAuthState(GatewayAuthState.Register, msg);
+      return;
     }
+
+    if (msg.code === ErrorCode.InvalidToken) {
+      this.switchAuthState(GatewayAuthState.Loading);
+      return;
+    }
+
+    this.error = msg;
   }
 
   switchAuthState(authState: GatewayAuthState, error?: ErrorResponse) {
@@ -961,6 +1053,37 @@ export class Gateway {
     }
   }
 
+  onMessageUpdate(msg: MessageUpdateEvent) {
+    console.log("MessageUpdate", msg);
+    this.processMessages([msg.message]);
+    this.messages.set(msg.message.id, msg.message);
+
+    if (this.pendingMessages.has(msg.message.id)) {
+      this.pendingMessages.delete(msg.message.id);
+    }
+  }
+
+  onMessageDelete(msg: MessageDeleteEvent) {
+    console.log("MessageDelete", msg);
+    this.messages.delete(msg.message);
+    const state = this.channelStates.get(msg.message);
+    if (state == undefined) {
+      return;
+    }
+    state.messages = state.messages.filter((m) => m !== msg.message);
+    state.pendingMessages = state.pendingMessages.filter(
+      (m) => m !== msg.message
+    );
+    if (this.currentChannel == msg.message) {
+      this.syncCurrent(state);
+    }
+    this.pendingMessages.forEach((pending, key) => {
+      if (pending.message === msg.message) {
+        this.pendingMessages.delete(key);
+      }
+    });
+  }
+
   onUsers(msg: UsersResponse) {
     this.processUsers(msg.users);
   }
@@ -989,8 +1112,8 @@ export class Gateway {
   }
 
   onResponse(msg: any) {
-    if (msg.type === EventType.SiteResponse) {
-      this.onSite(msg.data);
+    if (msg.type === EventType.SettingsResponse) {
+      this.onSettings(msg.data);
     } else if (msg.type === EventType.TokenResponse) {
       this.onToken(msg.data);
     } else if (msg.type === EventType.OverviewResponse) {
@@ -1003,8 +1126,12 @@ export class Gateway {
       this.onUserList(msg.data);
     } else if (msg.type === EventType.MessageSendResponse) {
       this.onSendMessageResponse(msg.data, msg.seq);
+    } else if (msg.type === EventType.MessageDelete) {
+      this.onMessageDelete(msg.data);
     } else if (msg.type === EventType.MessageAdd) {
       this.onMessageAdd(msg.data);
+    } else if (msg.type === EventType.MessageUpdate) {
+      this.onMessageUpdate(msg.data);
     } else if (msg.type === EventType.ErrorResponse) {
       this.onError(msg.data);
     }

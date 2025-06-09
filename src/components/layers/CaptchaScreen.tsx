@@ -4,9 +4,9 @@ import { useChatState, useChatStateShallow } from "../../state";
 
 import HCaptcha from "@hcaptcha/react-hcaptcha";
 
-export default function CaptchaLayer() {
+export default function CaptchaScreen() {
   const captchaSiteKey = useChatState((state) => {
-    return state.gateway.site?.captchaSiteKey ?? "";
+    return state.gateway.settings?.captchaSiteKey ?? "";
   });
   const needCaptcha = useChatState((state) => {
     return state.gateway.requestPendingCaptcha !== undefined;

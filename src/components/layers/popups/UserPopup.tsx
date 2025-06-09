@@ -5,7 +5,7 @@ import { UserAvatarBigSVG } from "../../Users";
 import { FormatColor } from "../../../util";
 import { ClickWrapper } from "../../Common";
 
-export default function UserPopupLayer() {
+export default function UserPopup() {
   const ref = useRef<HTMLDivElement>(null);
   const userPopup = useChatState((state) => state.userPopup);
   const setUserPopup = useChatState((state) => state.setUserPopup);
@@ -32,7 +32,7 @@ export default function UserPopupLayer() {
   return (
     <ClickWrapper
       passthrough={true}
-      onClick={(e) => {
+      onClick={() => {
         if (userPopup == undefined) {
           return;
         }

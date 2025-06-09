@@ -6,9 +6,15 @@ import {
 
 import { useEffect, useRef, useState, useMemo } from "react";
 
-import { SyntaxContent } from "../syntax";
+import { SyntaxContent, EmojiContent } from "../syntax";
 
-import { Attachment, AttachmentType, Embed, EmbedType } from "../models";
+import {
+  Attachment,
+  AttachmentType,
+  Embed,
+  EmbedType,
+  Permissions,
+} from "../models";
 
 import { VideoDisplay, ImageDisplay } from "./Media";
 
@@ -18,17 +24,23 @@ import { IoMdCreate } from "react-icons/io";
 
 import {
   FormatDateTime,
+  FormatDateTimeLong,
   FormatTime,
   FormatColor,
   Roll,
   GetFileIcon,
   FormatBytes,
+  isInsideSelection,
 } from "../util";
+
+import { Autocomplete, AutocompleteRef } from "./Autocomplete";
+import { MarkdownTextbox, MarkdownTextboxRef } from "./Input";
 
 import { FaFile, FaTimes } from "react-icons/fa";
 
 import Rand from "rand-seed";
-import { IconButton } from "./Common";
+import { IconButton, TooltipWrapper } from "./Common";
+import { set } from "date-fns";
 
 export function MessageEntry({ id }: { id: string }) {
   const content = useMemo(() => {
@@ -41,9 +53,17 @@ export function MessageEntry({ id }: { id: string }) {
   return content;
 }
 
-function Message({ id }: { id: string }) {
+export function Message({
+  id,
+  standalone,
+}: {
+  id: string;
+  standalone?: boolean;
+}) {
   const message = useChatStateShallow((state) => {
-    const m = state.gateway.messages.get(id)!;
+    const m = state.gateway.messages.get(id);
+    if (!m) return undefined;
+
     const a = state.gateway.users.get(m.author);
     const p = state.gateway.pendingMessages.has(id);
     const c = state.gateway.currentMessagesIsCombined.get(id)!;
@@ -65,11 +85,23 @@ function Message({ id }: { id: string }) {
       uploading: u,
       combined: c,
       you: a?.id == state.gateway.currentUser,
+      permissions: state.gateway.getPermissions(
+        state.gateway.currentUser!,
+        m.channel
+      ),
     };
   });
 
-  //console.log("MESSAGE", id, message);
-  const lookups = GetChatStateLookups();
+  const ref = useRef<HTMLDivElement>(null);
+
+  const [isEditing, setIsEditing] = useState(false);
+  const editedValue = useRef<string | undefined>();
+  const isEdited = editedValue.current !== undefined;
+  const updateMessage = useChatState((state) => state.updateMessage);
+
+  useEffect(() => {
+    editedValue.current = undefined;
+  }, [message?.editedTimestamp]);
 
   const setViewerModal = useChatState((state) => state.setViewerModal);
   const setUserPopup = useChatState((state) => state.setUserPopup);
@@ -77,14 +109,131 @@ function Message({ id }: { id: string }) {
     (state) => state.setContextMenuPopup
   );
 
-  const hasContextMenu = useChatState((state) => {
-    return state.contextMenuPopup?.messageId == id;
+  const contextMenu = useChatState((state) => {
+    return state.contextMenuPopup;
   });
+
+  const hasContextMenu = contextMenu?.messageId == id;
+  const isCombined = !standalone && (message?.combined ?? false);
+
+  const messageContent = useMemo(() => {
+    if (isEditing) {
+      return (
+        <MessageEditor
+          id={id}
+          content={message?.content ?? ""}
+          setContent={(content: string) => {
+            editedValue.current = content;
+          }}
+          cancel={() => {
+            editedValue.current = undefined;
+            setIsEditing(false);
+          }}
+          save={() => {
+            setIsEditing(false);
+            if (message !== undefined && editedValue.current !== undefined) {
+              updateMessage(message.id, editedValue.current);
+            }
+          }}
+        />
+      );
+    }
+    return (
+      <>
+        <SyntaxContent
+          text={editedValue.current ?? message?.content ?? ""}
+        ></SyntaxContent>
+        {message?.editedTimestamp && (
+          <MessageEditedTimestamp timestamp={message.editedTimestamp} />
+        )}
+      </>
+    );
+  }, [message?.editedTimestamp, isEditing]);
+
+  const permissions = message?.permissions ?? 0;
+
+  const canReply = (permissions & Permissions.SendMessages) != 0;
+  const canReact = (permissions & Permissions.AddReactions) != 0;
+  const canEdit = message?.you;
+
+  const messageActions = useMemo(() => {
+    if (isEditing) {
+      return <></>;
+    }
+
+    return (
+      <div className="message-actions-container">
+        <div className="message-actions-bar">
+          {!message?.you && canReply && (
+            <IconButton
+              tooltip="Reply"
+              tooltipDirection="top"
+              className="message-actions-button row"
+              onClick={() => {}}
+            >
+              <RiReplyFill />
+            </IconButton>
+          )}
+          {message?.you && canEdit && (
+            <IconButton
+              tooltip="Edit"
+              tooltipDirection="top"
+              className="message-actions-button row"
+              onClick={() => {
+                setIsEditing(true);
+              }}
+            >
+              <IoMdCreate />
+            </IconButton>
+          )}
+          {canReact && (
+            <IconButton
+              tooltip="Add Reaction"
+              tooltipDirection="top"
+              className="message-actions-button row"
+              onClick={() => {}}
+            >
+              <RiEmotionFill />
+            </IconButton>
+          )}
+
+          <IconButton
+            tooltip="More"
+            tooltipDirection="top"
+            className={`message-actions-button row ${
+              hasContextMenu && contextMenu.static ? "active" : ""
+            }`}
+            onClick={(rect) => {
+              if (hasContextMenu) {
+                setContextMenuPopup(undefined);
+              } else {
+                setContextMenuPopup({
+                  messageId: id,
+                  direction: "right",
+                  position: {
+                    x: rect.right + 8,
+                    y: rect.top - 2,
+                  },
+                  static: true,
+                });
+              }
+            }}
+          >
+            <RiMoreFill />
+          </IconButton>
+        </div>
+      </div>
+    );
+  }, [hasContextMenu, isEditing]);
+
+  if (message === undefined) {
+    return <></>;
+  }
 
   function doView(index: number) {
     setViewerModal({
       index: index,
-      items: [...message.attachments!],
+      items: [...message!.attachments!],
     });
   }
 
@@ -94,9 +243,10 @@ function Message({ id }: { id: string }) {
 
   const className =
     "message-entry" +
-    (message?.combined ? " combined" : "") +
+    (isCombined ? " combined" : "") +
     (message?.pending ? " pending" : "") +
-    (hasContextMenu ? " active" : ""); //+
+    (hasContextMenu ? " active" : "") +
+    (isEditing ? " editing" : "");
   //(message?.anchor ? " anchor" : "");
 
   var header = (
@@ -111,12 +261,11 @@ function Message({ id }: { id: string }) {
           onClick={(e) => {
             if (message.user) {
               var rect = e.currentTarget.getBoundingClientRect();
-              console.log("CLICK", rect);
               setUserPopup({
                 id: message.author,
                 user: message.user,
                 position: {
-                  x: rect.right + 16,
+                  x: rect.right + 8,
                   y: rect.top,
                 },
                 direction: "right",
@@ -128,7 +277,9 @@ function Message({ id }: { id: string }) {
         >
           {message?.name ?? id}
         </span>
-        <span className="message-timestamp">{FormatDateTime(timestamp)}</span>
+        <TooltipWrapper tooltip={FormatDateTimeLong(timestamp)} delay={1000}>
+          <span className="message-timestamp">{FormatDateTime(timestamp)}</span>
+        </TooltipWrapper>
       </div>
     </>
   );
@@ -179,90 +330,46 @@ function Message({ id }: { id: string }) {
     }
   }
 
-  const messageContent = useMemo(() => {
-    return (
-      <SyntaxContent
-        text={message?.content ?? ""}
-        lookups={lookups}
-      ></SyntaxContent>
-    );
-  }, [message?.edited_timestamp]);
-
-  const messageActions = useMemo(() => {
-    return (
-      <div className="message-actions-container">
-        <div className="message-actions-bar">
-          {!message.you && (
-            <IconButton
-              tooltip="Reply"
-              tooltipDirection="top"
-              className="message-actions-button row"
-              onClick={() => {}}
-            >
-              <RiReplyFill />
-            </IconButton>
-          )}
-          {message.you && (
-            <IconButton
-              tooltip="Edit"
-              tooltipDirection="top"
-              className="message-actions-button row"
-              onClick={() => {}}
-            >
-              <IoMdCreate />
-            </IconButton>
-          )}
-          <IconButton
-            tooltip="Add Reaction"
-            tooltipDirection="top"
-            className="message-actions-button row"
-            onClick={() => {}}
-          >
-            <RiEmotionFill />
-          </IconButton>
-
-          <IconButton
-            tooltip="More"
-            tooltipDirection="top"
-            className={`message-actions-button row ${
-              hasContextMenu ? "active" : ""
-            }`}
-            onClick={(rect) => {
-              console.log("HERE", hasContextMenu);
-              if (hasContextMenu) {
-                setContextMenuPopup(undefined);
-              } else {
-                var flip = rect.top > window.innerHeight - 350;
-
-                setContextMenuPopup({
-                  messageId: id,
-                  direction: flip ? "right-top" : "right",
-                  position: {
-                    x: rect.right + 8,
-                    y: rect.top - 2,
-                  },
-                });
-              }
-            }}
-          >
-            <RiMoreFill />
-          </IconButton>
-        </div>
-      </div>
-    );
-  }, [hasContextMenu]);
-
   const hasAttachments = attachmentGroups.length > 0;
   const hasEmbeds = message.embeds ? true : false;
   const hasUploading = message.uploading;
+  const isEmbedding = message.embeddableURLs?.length ?? 0 > 0;
 
-  const hasAccessories = hasAttachments || hasEmbeds || hasUploading;
+  const hasAccessories =
+    hasAttachments || hasEmbeds || hasUploading || isEmbedding;
 
   return (
-    <div id={id} className={className}>
-      {!message?.combined && header}
-      {message?.combined && (
-        <div className="message-timestamp-inline">{FormatTime(timestamp)}</div>
+    <div
+      id={id}
+      ref={ref}
+      className={className}
+      onContextMenu={(e) => {
+        if (isInsideSelection(e)) {
+          return;
+        }
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (hasContextMenu) {
+          return;
+        }
+
+        setContextMenuPopup({
+          messageId: id,
+          direction: "right",
+          position: { x: e.clientX, y: e.clientY },
+          static: false,
+        });
+      }}
+    >
+      {!isCombined && header}
+      {isCombined && (
+        <div className="message-timestamp-inline">
+          <TooltipWrapper tooltip={FormatDateTimeLong(timestamp)} delay={1000}>
+            <span>{FormatTime(timestamp)}</span>
+          </TooltipWrapper>
+        </div>
       )}
       <div className="message-content">{messageContent}</div>
       <div className="message-actions">{messageActions}</div>
@@ -298,10 +405,82 @@ function Message({ id }: { id: string }) {
               ))}
             </div>
           )}
+          {isEmbedding && (
+            <div className="message-embedding-loader">
+              <div className="message-embed">
+                <div className="loader"></div>
+              </div>
+            </div>
+          )}
           {message.uploading && <MessageUpload id={id} />}
         </div>
       )}
     </div>
+  );
+}
+
+function MessageEditor({
+  id,
+  content,
+  setContent,
+  cancel,
+  save,
+}: {
+  id: string;
+  content: string;
+  setContent: (content: string) => void;
+  cancel: () => void;
+  save: () => void;
+}) {
+  const autocompleteRef = useRef<AutocompleteRef>(null);
+  const textboxRef = useRef<MarkdownTextboxRef>(null);
+
+  return (
+    <>
+      <Autocomplete
+        ref={autocompleteRef}
+        onComplete={(word: string, completion: string) => {
+          if (textboxRef.current) {
+            textboxRef.current.complete(word, completion);
+          }
+        }}
+      />
+      <div
+        className="message-editor-textbox"
+        onKeyDown={(e) => {
+          autocompleteRef.current?.onKeyDown(e);
+        }}
+      >
+        <MarkdownTextbox
+          ref={textboxRef}
+          value={content}
+          onValue={(text: string, cursor: number) => {
+            autocompleteRef.current?.onValue(text, cursor);
+            setContent(text);
+          }}
+        />
+      </div>
+      <div className="message-editor-controls">
+        {"escape to "}
+        <a
+          className="clickable-text"
+          onClick={() => {
+            cancel();
+          }}
+        >
+          {"cancel"}
+        </a>
+        {", enter to "}
+        <a
+          className="clickable-text"
+          onClick={() => {
+            save();
+          }}
+        >
+          {"save"}
+        </a>
+      </div>
+    </>
   );
 }
 
@@ -471,7 +650,7 @@ function MessageRichEmbed({ embed }: { embed: Embed }) {
         rel="noreferrer noopener"
         target="_blank"
       >
-        {embed.provider.name}
+        <EmojiContent text={embed.provider.name} />
       </a>
     );
   }
@@ -485,7 +664,7 @@ function MessageRichEmbed({ embed }: { embed: Embed }) {
         rel="noreferrer noopener"
         target="_blank"
       >
-        {embed.author.name}
+        <EmojiContent text={embed.author.name} />
       </a>
     );
   }
@@ -499,7 +678,7 @@ function MessageRichEmbed({ embed }: { embed: Embed }) {
         rel="noreferrer noopener"
         target="_blank"
       >
-        {embed.title}
+        <EmojiContent text={embed.title} />
       </a>
     );
   }
@@ -507,7 +686,7 @@ function MessageRichEmbed({ embed }: { embed: Embed }) {
   if (embed.description) {
     inner.push(
       <div className="embed-description" key="embed-description">
-        {embed.description}
+        <EmojiContent text={embed.description} />
       </div>
     );
   }
@@ -692,6 +871,17 @@ function MessageAttachment({
     >
       {inner}
     </div>
+  );
+}
+
+function MessageEditedTimestamp({ timestamp }: { timestamp: number }) {
+  return (
+    <TooltipWrapper
+      tooltip={FormatDateTimeLong(new Date(timestamp))}
+      delay={750}
+    >
+      <span className="message-edited-timestamp">{" (edited)"}</span>
+    </TooltipWrapper>
   );
 }
 
