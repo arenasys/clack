@@ -10,6 +10,7 @@ import {
 
 import { useChatState, useChatStateShallow } from "../state";
 import { GetTooltipPosition } from "../util";
+import { point } from "slate";
 
 export function IconButton({
   children,
@@ -87,13 +88,14 @@ export function TooltipWrapper({
   direction = "top",
   delay = 0,
   className = "",
+  ...rest
 }: {
   children?: any;
   tooltip: string;
   delay?: number;
   direction?: "top" | "bottom" | "left" | "right";
   className?: string;
-}) {
+} & React.HTMLAttributes<HTMLSpanElement>) {
   const ref = useRef<HTMLSpanElement>(null);
   const setTooltipPopup = useChatState((state) => state.setTooltipPopup);
   const clearTooltipPopup = useChatState((state) => state.clearTooltipPopup);
@@ -147,6 +149,7 @@ export function TooltipWrapper({
     <span
       ref={ref}
       className={"tooltip-wrapper " + className}
+      {...rest}
       onMouseEnter={() => {
         setIsHovered(true);
       }}
@@ -187,10 +190,6 @@ export function ClickWrapper({
 
     function onPointerDown(e: PointerEvent) {
       pointerDowned.current = isClickOnWrapper(e.clientX, e.clientY);
-
-      e.stopImmediatePropagation();
-      e.stopPropagation();
-      e.preventDefault();
     }
 
     function onPointerUp(e: PointerEvent) {

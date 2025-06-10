@@ -15,7 +15,7 @@ export default function ContextMenuPopup() {
     if (contextMenuPopup == undefined) return [false, 0];
     if (state.gateway.currentUser === undefined) return [false, 0];
 
-    const message = state.gateway.messages.get(contextMenuPopup.messageId);
+    const message = state.gateway.messages.get(contextMenuPopup.message);
     if (message == undefined) return [false, 0];
 
     return [
@@ -35,6 +35,8 @@ export default function ContextMenuPopup() {
   const setMessageDeleteModal = useChatState(
     (state) => state.setMessageDeleteModal
   );
+
+  const setReplyingTo = useChatState((state) => state.setReplyingTo);
 
   if (contextMenuPopup == undefined) {
     return <></>;
@@ -81,7 +83,13 @@ export default function ContextMenuPopup() {
         </div>
         <div className="context-menu-divider" />
         {canReplyMessage && (
-          <div className="context-menu-entry">
+          <div
+            className="context-menu-entry"
+            onClick={() => {
+              setReplyingTo(contextMenuPopup.message);
+              setContextMenuPopup(undefined);
+            }}
+          >
             <div className="context-menu-label">Reply</div>
           </div>
         )}
@@ -101,9 +109,12 @@ export default function ContextMenuPopup() {
         {canDeleteMessage && (
           <div
             className="context-menu-entry"
-            onClick={() => {
-              setMessageDeleteModal({ messageId: contextMenuPopup.messageId });
-              //deleteMessage(contextMenuPopup.messageId);
+            onClick={(e) => {
+              if (e.shiftKey) {
+                deleteMessage(contextMenuPopup.message);
+              } else {
+                setMessageDeleteModal({ message: contextMenuPopup.message });
+              }
               setContextMenuPopup(undefined);
             }}
           >

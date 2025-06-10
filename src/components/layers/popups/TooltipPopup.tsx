@@ -1,7 +1,6 @@
 import { useChatState, useChatStateShallow } from "../../../state";
 export default function TooltipPopup() {
   const tooltipPopup = useChatState((state) => state.tooltipPopup);
-  const setTooltipPopup = useChatState((state) => state.setTooltipPopup);
 
   if (tooltipPopup == undefined) {
     return <></>;

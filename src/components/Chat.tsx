@@ -1,4 +1,9 @@
-import { RiAddCircleFill, RiEmotionFill } from "react-icons/ri";
+import {
+  RiAddCircleFill,
+  RiCloseCircleFill,
+  RiEmotionFill,
+} from "react-icons/ri";
+import { IoMdCloseCircle } from "react-icons/io";
 
 import { useChatState, useChatStateShallow } from "../state";
 
@@ -11,11 +16,16 @@ import { Attachments } from "./Attachments";
 
 import { Autocomplete, AutocompleteRef } from "./Autocomplete";
 
-import { ChooseFiles, GetFileType, MakeSnowflake } from "../util";
+import { ErrorBoundary } from "react-error-boundary";
+import { Fallback } from "./Error";
+
+import { ChooseFiles, FormatColor, GetFileType, MakeSnowflake } from "../util";
 
 import { MarkdownTextbox, MarkdownTextboxRef } from "./Input";
+import { IconButton, TooltipWrapper } from "./Common";
 import List from "./List";
 import { Descendant } from "slate";
+import { IoClose } from "react-icons/io5";
 
 export function Chat() {
   const messageView = useChatState((state) => state.gateway.currentMessages);
@@ -30,7 +40,11 @@ export function Chat() {
       anchor={anchor}
       setAnchor={setAnchor}
       entry={(id: string) => {
-        return <MessageEntry key={id} id={id} />;
+        return (
+          <ErrorBoundary FallbackComponent={Fallback}>
+            <MessageEntry key={id} id={id} />
+          </ErrorBoundary>
+        );
       }}
       defaultBottom={true}
     ></List>
@@ -65,6 +79,23 @@ export function Input() {
 
     setAttachments(newFiles, [], []);
   }
+
+  const [replyingMention, setReplyingMention] = useState<boolean>(false);
+  const replyingTo = useChatStateShallow((state) => {
+    var id = state.gateway.currentReplyingTo;
+    if (id === undefined) return undefined;
+
+    const message = state.gateway.messages.get(id);
+    if (message === undefined) return undefined;
+
+    const author = state.gateway.users.get(message.author);
+
+    return {
+      message: message,
+      author: author,
+    };
+  });
+  const setReplyingTo = useChatState((state) => state.setReplyingTo);
 
   const setEmojiPickerPopup = useChatState(
     (state) => state.setEmojiPickerPopup
@@ -119,13 +150,59 @@ export function Input() {
     />
   );
 
+  const isReplying = replyingTo !== undefined;
+  const isAttaching = attaching;
+
   return (
     <>
       {autocomplete}
-      {attaching && <Attachments />}
+
+      {isReplying && (
+        <div id="reply-to-container">
+          <span>
+            {"Replying to"}
+            <span
+              className="reply-to-name"
+              style={{
+                color: FormatColor(replyingTo.author?.color),
+              }}
+            >
+              {" "}
+              {replyingTo.author?.nickname ??
+                replyingTo.author?.username ??
+                "Unknown"}
+            </span>
+          </span>
+          <TooltipWrapper
+            tooltip={`${replyingMention ? "Disable" : "Enable"} Mention`}
+            className={`reply-to-at ${replyingMention ? "active" : ""}`}
+            onClick={() => {
+              setReplyingMention(!replyingMention);
+            }}
+          >
+            {"@"}
+            <span className="reply-to-at-label">{`${
+              replyingMention ? "ON" : "OFF"
+            }`}</span>
+          </TooltipWrapper>
+          <IconButton
+            className="reply-to-close-button foreground"
+            onClick={() => {
+              setReplyingTo(undefined);
+            }}
+          >
+            <IoClose className="reply-to-close-icon" />
+          </IconButton>
+        </div>
+      )}
+      {isAttaching && <Attachments className={isReplying ? "combined" : ""} />}
       <div
         id="textbox-container"
-        className={"input-scrollbar" + (attaching ? " upload" : "")}
+        className={
+          "input-scrollbar" +
+          (isAttaching || isReplying ? " combined" : "") +
+          (isAttaching ? " divider" : "")
+        }
       >
         <button
           className="input-button clickable-button"

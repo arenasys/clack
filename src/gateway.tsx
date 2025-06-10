@@ -76,6 +76,7 @@ export class GatewayChannelState {
   anchor?: Snowflake;
   editor: string = "";
   attachments: GatewayPendingAttachment[] = [];
+  replyingTo: Snowflake | undefined = undefined;
 
   firstMessage?: Snowflake;
   lastMessage?: Snowflake;
@@ -370,6 +371,7 @@ export class Gateway {
   currentMessagesIsCombined: Map<Snowflake, boolean> = new Map();
   currentEditor: string = "";
   currentFiles: GatewayPendingAttachment[] = [];
+  currentReplyingTo: Snowflake | undefined = undefined;
 
   pendingMessages: Map<Snowflake, PendingMessage> = new Map();
 
@@ -541,8 +543,8 @@ export class Gateway {
     });
   }
 
-  syncCurrent(order: GatewayChannelState) {
-    this.currentMessages = order.getMessageView();
+  syncCurrent(state: GatewayChannelState) {
+    this.currentMessages = state.getMessageView();
 
     this.currentMessagesIsCombined.clear();
     for (let i = 1; i < this.currentMessages.length; i++) {
@@ -559,8 +561,9 @@ export class Gateway {
       this.currentMessagesIsCombined.set(curr.id, combined);
     }
 
-    this.currentEditor = order.editor;
-    this.currentFiles = order.attachments;
+    this.currentEditor = state.editor;
+    this.currentFiles = state.attachments;
+    this.currentReplyingTo = state.replyingTo;
   }
 
   setChatScroll(top: Snowflake, center: Snowflake, bottom: Snowflake) {
@@ -695,6 +698,16 @@ export class Gateway {
 
       state.attachments = [...state.attachments];
     }
+
+    this.syncCurrent(state);
+  }
+
+  setReplyingTo(message: Snowflake | undefined) {
+    const state = this.channelStates.get(this.currentChannel ?? "");
+
+    if (state === undefined) return;
+
+    state.replyingTo = message;
 
     this.syncCurrent(state);
   }

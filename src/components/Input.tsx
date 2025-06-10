@@ -651,8 +651,6 @@ export const MarkdownTextbox = forwardRef(function MarkdownTextbox(
     return v;
   }
 
-  console.log("HERE");
-
   const renderLeaf = useCallback(
     (props: RenderLeafProps) => <CustomLeaf {...props} />,
     []

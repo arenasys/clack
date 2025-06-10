@@ -8,6 +8,10 @@
   src: url("Inconsolata-VF.ttf") format("truetype");
 }
 
+/**:focus {
+  outline: 2px solid crimson !important;
+}*/
+
 :root {
   --default-font: "Cantarell", ui-sans-serif, system-ui, sans-serif;
   --monospace-font: "Inconsolata", ui-monospace, monospace;
@@ -41,13 +45,16 @@
   --shadow-ledge: 0 2px 0 0 hsl(none 0% 0% / 0.05),
     0 1.5px 0 0 hsl(none 0% 0% / 0.05), 0 1px 0 0 hsl(none 0% 0% / 0.16);
 
-  --message-highlight: #2e3035;
+  --message-highlight: rgba(0, 0, 0, 0.06);
+  --message-replying: rgba(213, 63, 50, 0.1); /* 0.2 */
+
   --message-name: #f2f3f5;
   --message-actions-border: #33353a;
 
   --mention-background: #e736363d;
   --mention-background-hover: #e7363679;
   --mention-foreground: #dbcece;
+  --mention-text: #da5050;
 
   --scrollbar-thumb-0: #1a1b1e;
   --scrollbar-thumb-1: #222226;
@@ -168,6 +175,69 @@ img.emoji.external {
 .clickable-text:hover {
   text-decoration: underline;
   cursor: pointer;
+}
+
+.error-boundary {
+  padding: 16px;
+  height: 100%;
+  width: 100%;
+  min-width: 52px;
+  min-height: 52px;
+  font-size: 14px;
+  font-weight: 450;
+  color: var(--fg-color-1-0);
+  background-color: var(--accent-color-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  text-align: center;
+  position: relative;
+  overflow: clip;
+}
+
+.error-boundary-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--fg-color-1);
+  text-transform: uppercase;
+}
+
+.error-boundary-copy {
+  position: absolute;
+  top: 0px;
+  bottom: 0px;
+  right: 0px;
+  left: 0px;
+  opacity: 0;
+  background-color: var(--accent-color-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.error-boundary-copy:hover {
+  opacity: 1;
+}
+
+.error-boundary-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(50, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+}
+
+.error-boundary-layer .error-boundary {
+  border-radius: 4px;
+  width: unset;
+  height: unset;
 }
 
 #root {
@@ -338,10 +408,13 @@ img.emoji.external {
   height: fit-content;
 }
 
-#textbox-container.upload {
+#textbox-container.combined {
   margin-top: 0px;
-  border-top: 1px solid var(--divider-color);
   border-radius: 0px 0px 8px 8px;
+}
+
+#textbox-container.divider {
+  border-top: 1px solid var(--divider-color);
 }
 
 #upload-container {
@@ -351,6 +424,15 @@ img.emoji.external {
   height: 248px;
   width: calc(100% - 32px);
   position: relative;
+}
+
+#upload-container.combined {
+  margin-top: 0px;
+  border-radius: 0px;
+}
+
+#upload-container.divider {
+  border-top: 1px solid var(--divider-color);
 }
 
 .upload-row {
@@ -458,6 +540,61 @@ img.emoji.external {
   overflow: clip;
 }
 
+#reply-to-container {
+  margin: 4px 16px 0px 16px;
+  background-color: var(--bg-color-1);
+  border-radius: 8px 8px 0px 0px;
+  height: 40px;
+  width: calc(100% - 32px);
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding-left: 16px;
+
+  color: var(--fg-color-2);
+  font-size: 14px;
+  font-weight: 425;
+  user-select: none;
+}
+
+.reply-to-name {
+  font-size: 16px;
+  font-weight: 450;
+}
+
+.reply-to-at {
+  margin-left: auto;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.reply-to-at.active {
+  color: var(--mention-text);
+}
+
+.reply-to-at-label {
+  display: inline-block;
+  font-size: 14px;
+  padding-top: 2px;
+  padding-left: 2px;
+  width: 28px;
+  text-align: left;
+}
+
+.reply-to-at.active .reply-to-at-label {
+  font-weight: 650;
+}
+
+.reply-to-close-button {
+  margin-right: 12px;
+  margin-left: 8px;
+  padding-top: 1px;
+  width: 20px !important;
+  height: 20px !important;
+}
+
 #textbox {
   flex: 1;
   padding: 11px 11px 11px 0px;
@@ -493,6 +630,18 @@ img.emoji.external {
 
 .message-entry:hover {
   background-color: var(--message-highlight);
+}
+
+.message-entry.replying::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: -1;
+  background-color: var(--message-replying);
+  border-left: 2px solid var(--accent-color-1);
 }
 
 .message-entry.skeleton {
@@ -593,7 +742,7 @@ img.emoji.external {
 }
 
 .message-edited-timestamp {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--fg-color-2);
   cursor: default;
 }

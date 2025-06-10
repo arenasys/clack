@@ -103,7 +103,7 @@ export function UploadTile({ file }: { file: GatewayPendingAttachment }) {
   );
 }
 
-export function Attachments() {
+export function Attachments({ className }: { className?: string }) {
   const rowRef = useRef<HTMLDivElement>(null);
 
   const currentFilesCount = useChatState(
@@ -112,7 +112,7 @@ export function Attachments() {
   const currentFiles = useChatState((state) => state.gateway.currentFiles);
 
   return (
-    <div id="upload-container">
+    <div id="upload-container" className={className}>
       <div ref={rowRef} className="upload-row input-scrollbar">
         {currentFiles.map((file, index) => {
           return <UploadTile key={file.id} file={file} />;

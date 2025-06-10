@@ -17,6 +17,8 @@ import LoginScreen from "./layers/LoginScreen";
 import CaptchaScreen from "./layers/CaptchaScreen";
 
 import { RiArrowDownSLine } from "react-icons/ri";
+import { ErrorBoundary } from "react-error-boundary";
+import { Fallback, FallbackLayer } from "./Error";
 
 function App() {
   return (
@@ -33,44 +35,88 @@ function App() {
             </button>
           </div>
           <div id="center-header-container">
-            <Header />
+            <ErrorBoundary FallbackComponent={Fallback}>
+              <Header />
+            </ErrorBoundary>
           </div>
         </div>
         <div id="body-container">
           <div id="left-body-container">
             <div id="channel-container">
-              <Channels />
+              <ErrorBoundary FallbackComponent={Fallback}>
+                <Channels />
+              </ErrorBoundary>
             </div>
             <div id="you-container">
-              <You />
+              <ErrorBoundary FallbackComponent={Fallback}>
+                <You />
+              </ErrorBoundary>
             </div>
           </div>
           <div id="center-body-container">
             <div id="chat-container">
-              <Chat />
+              <ErrorBoundary FallbackComponent={Fallback}>
+                <Chat />
+              </ErrorBoundary>
             </div>
             <div id="input-container">
-              <Input />
+              <ErrorBoundary FallbackComponent={Fallback}>
+                <Input />
+              </ErrorBoundary>
             </div>
           </div>
           <div id="right-body-container">
             <div id="user-container">
-              <Users />
+              <ErrorBoundary FallbackComponent={Fallback}>
+                <Users />
+              </ErrorBoundary>
             </div>
           </div>
         </div>
       </div>
-      <AttachmentModal />
-      <ViewerModal />
-      <DeleteMessageModal />
-      <UserPopup />
-      <EmojiPickerPopup />
-      <ContextMenuPopup />
-      <LoginScreen />
-      <CaptchaScreen />
-      <LoadingScreen />
-      <ErrorModal />
-      <TooltipPopup />
+      <ErrorBoundary FallbackComponent={FallbackLayer}>
+        <AttachmentModal />
+      </ErrorBoundary>
+
+      <ErrorBoundary FallbackComponent={FallbackLayer}>
+        <ViewerModal />
+      </ErrorBoundary>
+
+      <ErrorBoundary FallbackComponent={FallbackLayer}>
+        <DeleteMessageModal />
+      </ErrorBoundary>
+
+      <ErrorBoundary FallbackComponent={FallbackLayer}>
+        <UserPopup />
+      </ErrorBoundary>
+
+      <ErrorBoundary FallbackComponent={FallbackLayer}>
+        <EmojiPickerPopup />
+      </ErrorBoundary>
+
+      <ErrorBoundary FallbackComponent={FallbackLayer}>
+        <ContextMenuPopup />
+      </ErrorBoundary>
+
+      <ErrorBoundary FallbackComponent={FallbackLayer}>
+        <LoginScreen />
+      </ErrorBoundary>
+
+      <ErrorBoundary FallbackComponent={FallbackLayer}>
+        <CaptchaScreen />
+      </ErrorBoundary>
+
+      <ErrorBoundary FallbackComponent={FallbackLayer}>
+        <LoadingScreen />
+      </ErrorBoundary>
+
+      <ErrorBoundary FallbackComponent={FallbackLayer}>
+        <ErrorModal />
+      </ErrorBoundary>
+
+      <ErrorBoundary FallbackComponent={FallbackLayer}>
+        <TooltipPopup />
+      </ErrorBoundary>
     </>
   );
 }

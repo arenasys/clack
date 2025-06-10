@@ -46,14 +46,14 @@ export interface AttachmentModalState {
 }
 
 export interface MessageContextMenuState {
-  messageId: Snowflake;
+  message: Snowflake;
   direction: "right";
   position: { x: number; y: number };
   static: boolean;
 }
 
 export interface MessageDeleteModalState {
-  messageId: Snowflake;
+  message: Snowflake;
 }
 
 export interface ErrorModalState {
@@ -139,6 +139,7 @@ export interface ChatState {
     remove: GatewayPendingAttachment[],
     update: GatewayPendingAttachment[]
   ) => void;
+  setReplyingTo: (message: Snowflake | undefined) => void;
 
   // Search
   searchEmojis: (query: string) => Emoji[];
@@ -325,6 +326,13 @@ export const useChatState = create<ChatState>()((set) => {
       set(
         produce((state: ChatState) => {
           state.gateway.setAttachments(add, remove, update);
+          state.update(state);
+        })
+      ),
+    setReplyingTo: (message) =>
+      set(
+        produce((state: ChatState) => {
+          state.gateway.setReplyingTo(message);
           state.update(state);
         })
       ),

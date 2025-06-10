@@ -67,6 +67,7 @@ export function Message({
     const a = state.gateway.users.get(m.author);
     const p = state.gateway.pendingMessages.has(id);
     const c = state.gateway.currentMessagesIsCombined.get(id)!;
+    const r = state.gateway.currentReplyingTo;
 
     var u = false;
     if (p) {
@@ -84,6 +85,7 @@ export function Message({
       pending: p,
       uploading: u,
       combined: c,
+      replying: r == id,
       you: a?.id == state.gateway.currentUser,
       permissions: state.gateway.getPermissions(
         state.gateway.currentUser!,
@@ -108,13 +110,15 @@ export function Message({
   const setContextMenuPopup = useChatState(
     (state) => state.setContextMenuPopup
   );
+  const setReplyingTo = useChatState((state) => state.setReplyingTo);
 
   const contextMenu = useChatState((state) => {
     return state.contextMenuPopup;
   });
 
-  const hasContextMenu = contextMenu?.messageId == id;
+  const hasContextMenu = contextMenu?.message == id;
   const isCombined = !standalone && (message?.combined ?? false);
+  const isReplying = message?.replying ?? false;
 
   const messageContent = useMemo(() => {
     if (isEditing) {
@@ -169,7 +173,10 @@ export function Message({
               tooltip="Reply"
               tooltipDirection="top"
               className="message-actions-button row"
-              onClick={() => {}}
+              onClick={() => {
+                if (message === undefined) return;
+                setReplyingTo(message.id);
+              }}
             >
               <RiReplyFill />
             </IconButton>
@@ -208,7 +215,7 @@ export function Message({
                 setContextMenuPopup(undefined);
               } else {
                 setContextMenuPopup({
-                  messageId: id,
+                  message: id,
                   direction: "right",
                   position: {
                     x: rect.right + 8,
@@ -246,7 +253,8 @@ export function Message({
     (isCombined ? " combined" : "") +
     (message?.pending ? " pending" : "") +
     (hasContextMenu ? " active" : "") +
-    (isEditing ? " editing" : "");
+    (isEditing ? " editing" : "") +
+    (isReplying ? " replying" : "");
   //(message?.anchor ? " anchor" : "");
 
   var header = (
@@ -356,7 +364,7 @@ export function Message({
         }
 
         setContextMenuPopup({
-          messageId: id,
+          message: id,
           direction: "right",
           position: { x: e.clientX, y: e.clientY },
           static: false,
