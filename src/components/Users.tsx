@@ -1,9 +1,9 @@
-import { useChatState, useChatStateShallow } from "../state";
+import { useClackState, getClackState, ClackEvents } from "../state";
 import { FormatColor } from "../util";
 
 import { useRef } from "react";
 
-import { User, UserStatus } from "../models";
+import { User, UserStatus } from "../types";
 import Rand from "rand-seed";
 
 import List from "./List";
@@ -149,8 +149,10 @@ function UserAvatar({ user }: { user: User }) {
 
 export function UserEntry({ id, idx }: { id: string; idx: number }) {
   const ref = useRef<HTMLDivElement>(null);
-  const user = useChatStateShallow((state) => state.gateway.users.get(id));
-  const setUserPopup = useChatState((state) => state.setUserPopup);
+  const user = useClackState(ClackEvents.user(id), (state) =>
+    state.chat.users.get(id)
+  );
+  const setUserPopup = getClackState((state) => state.gui.setUserPopup);
 
   if (!user) {
     const gen = new Rand(String(idx));
@@ -207,14 +209,14 @@ export function UserEntry({ id, idx }: { id: string; idx: number }) {
 }
 
 function UserGroup({ id, count }: { id: string; count: number }) {
-  const userGroup = useChatStateShallow((state) => {
+  const userGroup = useClackState(ClackEvents.role(id), (state) => {
     var name = "";
     if (id == String(UserStatus.Online)) {
       name = "Online";
     } else if (id == String(UserStatus.Offline)) {
       name = "Offline";
     } else {
-      var role = state.gateway.roles.get(id);
+      var role = state.chat.roles.get(id);
       name = role ? role.name : "Unknown";
     }
     return {
@@ -244,12 +246,18 @@ function Spacer({ count }: { count: number }) {
 }
 
 function Users() {
-  const userGroups = useChatState((state) => state.gateway.userOrder.groups);
-  const setScroll = useChatState((state) => state.setUserScroll);
+  const userGroups = useClackState(
+    ClackEvents.userList,
+    (state) => state.chat.userOrder.groups
+  );
+  const setScroll = getClackState((state) => state.chat.setUserScroll);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const showing = useChatState((state) => state.showingUserList);
-  const setShowing = useChatState((state) => state.setShowingUserList);
+  const showing = useClackState(
+    ClackEvents.userList,
+    (state) => state.gui.showingUserList
+  );
+  const setShowing = getClackState((state) => state.gui.setShowingUserList);
 
   const scrollTimeout = useRef<number | null>(null);
 
@@ -313,8 +321,6 @@ function Users() {
       doScroll();
     }, 100);
   }
-
-  console.log("RENDER USERS", userGroups);
 
   if (!showing) {
     return null;

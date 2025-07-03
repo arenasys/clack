@@ -1,28 +1,51 @@
-import { useChatState, useChatStateShallow } from "../../../state";
+import {
+  useClackState,
+  getClackState,
+  ClackEvents,
+  useClackStateDynamic,
+} from "../../../state";
 import { IoIosArrowForward } from "react-icons/io";
 
-import { Permissions } from "../../../models";
+import { Permissions } from "../../../types";
 
 import { ClickWrapper } from "../../Common";
 
 export default function ContextMenuPopup() {
-  const contextMenuPopup = useChatState((state) => state.contextMenuPopup);
-  const setContextMenuPopup = useChatState(
-    (state) => state.setContextMenuPopup
+  const contextMenuPopup = useClackState(
+    ClackEvents.contextMenuPopup,
+    (state) => state.gui.contextMenuPopup
+  );
+  const setContextMenuPopup = getClackState(
+    (state) => state.gui.setContextMenuPopup
   );
 
-  const [yourMessage, permissions] = useChatStateShallow((state) => {
-    if (contextMenuPopup == undefined) return [false, 0];
-    if (state.gateway.currentUser === undefined) return [false, 0];
+  const [yourMessage, permissions] = useClackStateDynamic(
+    (state, events) => {
+      if (!contextMenuPopup) {
+        return [false, 0];
+      }
 
-    const message = state.gateway.messages.get(contextMenuPopup.message);
-    if (message == undefined) return [false, 0];
+      events.push(ClackEvents.current);
+      if (!state.chat.currentUser) {
+        return [false, 0];
+      }
 
-    return [
-      state.gateway.currentUser == message.author,
-      state.gateway.getPermissions(state.gateway.currentUser, message.channel),
-    ];
-  });
+      events.push(ClackEvents.message(contextMenuPopup.message));
+      const message = state.chat.messages.get(contextMenuPopup.message);
+      if (!message) {
+        return [false, 0];
+      }
+
+      events.push(ClackEvents.channel(message.channel));
+      events.push(ClackEvents.user(message.author));
+
+      return [
+        state.chat.currentUser === message.author,
+        state.chat.getPermissions(state.chat.currentUser, message.channel),
+      ];
+    },
+    [contextMenuPopup]
+  );
 
   const canEditMessage = yourMessage;
   const canManageMessage = (permissions & Permissions.ManageMessages) != 0;
@@ -31,12 +54,11 @@ export default function ContextMenuPopup() {
   const canDeleteMessage = yourMessage || canManageMessage;
   const canPinMessage = canManageMessage;
 
-  const deleteMessage = useChatState((state) => state.deleteMessage);
-  const setMessageDeleteModal = useChatState(
-    (state) => state.setMessageDeleteModal
+  const deleteMessage = getClackState((state) => state.chat.deleteMessage);
+  const setMessageDeleteModal = getClackState(
+    (state) => state.gui.setMessageDeleteModal
   );
-
-  const setReplyingTo = useChatState((state) => state.setReplyingTo);
+  const setReplyingTo = getClackState((state) => state.chat.setReplyingTo);
 
   if (contextMenuPopup == undefined) {
     return <></>;

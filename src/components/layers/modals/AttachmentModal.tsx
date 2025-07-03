@@ -1,8 +1,8 @@
 import { useEffect, useRef, useMemo, useState } from "react";
 
-import { useChatState } from "../../../state";
+import { useClackState, getClackState, ClackEvents } from "../../../state";
 
-import { AttachmentType } from "../../../models";
+import { AttachmentType } from "../../../types";
 
 import { ClickWrapper, Modal, ModalHandle } from "../../Common";
 import { set } from "date-fns";
@@ -10,9 +10,14 @@ import { set } from "date-fns";
 export default function AttachmentModal() {
   const modalRef = useRef<ModalHandle>(null);
 
-  const attachmentModal = useChatState((state) => state.attachmentModal);
-  const setAttachmentModal = useChatState((state) => state.setAttachmentModal);
-  const setAttachments = useChatState((state) => state.setAttachments);
+  const attachmentModal = useClackState(
+    ClackEvents.attachmentModal,
+    (state) => state.gui.attachmentModal
+  );
+  const setAttachmentModal = getClackState(
+    (state) => state.gui.setAttachmentModal
+  );
+  const setAttachments = getClackState((state) => state.chat.setAttachments);
 
   const [filename, setFilename] = useState<string>("");
   const [spoilered, setSpoilered] = useState<boolean>(false);

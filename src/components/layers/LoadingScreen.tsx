@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from "react";
 
-import { useChatState, useChatStateShallow } from "../../state";
-import { GatewayAuthState } from "../../gateway";
+import { useClackState, getClackState, ClackEvents } from "../../state";
+import { ChatAuthState } from "../../state/chat";
 
 export default function LoadingScreen() {
-  const isLoading = useChatState((state) => {
-    if (state.gateway.authState == GatewayAuthState.Disconnected) return true;
+  const isLoading = useClackState(ClackEvents.auth, (state) => {
+    if (state.chat.authState == ChatAuthState.Disconnected) return true;
 
-    if (state.gateway.authState == GatewayAuthState.Loading) return true;
+    if (state.chat.authState == ChatAuthState.Loading) return true;
 
     return false;
   });

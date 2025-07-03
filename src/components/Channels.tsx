@@ -1,4 +1,4 @@
-import { useChatState, useChatStateShallow } from "../state";
+import { useClackState, getClackState, ClackEvents } from "../state";
 
 import { HiOutlineHashtag } from "react-icons/hi";
 import { IoIosArrowDown, IoMdAdd } from "react-icons/io";
@@ -6,11 +6,15 @@ import { IoIosArrowDown, IoMdAdd } from "react-icons/io";
 import { useRef } from "react";
 
 function Channel({ id }: { id: string }) {
-  const channel = useChatStateShallow(
-    (state) => state.gateway.channels.get(id)!
+  const channel = useClackState(
+    ClackEvents.channel(id),
+    (state) => state.chat.channels.get(id)!
   );
-  const current = useChatState((state) => state.gateway.currentChannel == id);
-  const changeChannel = useChatState((state) => state.changeChannel);
+  const current = useClackState(
+    ClackEvents.current,
+    (state) => state.chat.currentChannel == id
+  );
+  const changeChannel = getClackState((state) => state.chat.changeChannel);
   return (
     <div
       className={"channel-entry clickable-button" + (current ? " current" : "")}
@@ -30,8 +34,9 @@ function ChannelGroup({
   id: string;
   children: JSX.Element[];
 }) {
-  const channelGroup = useChatStateShallow(
-    (state) => state.gateway.channels.get(id)!
+  const channelGroup = useClackState(
+    ClackEvents.channel(id),
+    (state) => state.chat.channels.get(id)!
   );
   return (
     <>
@@ -50,9 +55,10 @@ function ChannelGroup({
 }
 
 function Channels() {
-  const channelGroups = useChatState((state) => state.gateway.channelGroups);
-
-  console.log("CHANNELS, Channel groups", channelGroups);
+  const channelGroups = useClackState(
+    ClackEvents.channelList,
+    (state) => state.chat.channelGroups
+  );
 
   const noGroup = channelGroups.length == 0;
 

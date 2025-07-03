@@ -2,7 +2,7 @@ import { format, isToday, isYesterday } from "date-fns";
 import Rand from "rand-seed";
 import { sha256 } from "js-sha256";
 import Cookies from "universal-cookie";
-import { AttachmentType } from "./models";
+import { AttachmentType } from "./types";
 
 import {
   FaFile,

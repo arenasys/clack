@@ -2,18 +2,33 @@ import { HiOutlineHashtag } from "react-icons/hi";
 import { BiSearch } from "react-icons/bi";
 import { MdPeople } from "react-icons/md";
 
-import { useChatState, useChatStateShallow } from "../state";
+import {
+  useClackState,
+  useClackStateDynamic,
+  getClackState,
+  ClackEvents,
+} from "../state";
 
 import { useEffect, useRef, useState, useMemo } from "react";
 import { IconButton } from "./Common";
 
 export function Header() {
-  const currentChannel = useChatState((state) =>
-    state.gateway.channels.get(state.gateway.currentChannel ?? "")
-  );
+  const currentChannel = useClackStateDynamic((state, events) => {
+    events.push(ClackEvents.current);
+    if (!state.chat.currentChannel) {
+      return undefined;
+    }
+    events.push(ClackEvents.channel(state.chat.currentChannel));
+    return state.chat.channels.get(state.chat.currentChannel);
+  });
 
-  const showingUserList = useChatState((state) => state.showingUserList);
-  const setShowingUserList = useChatState((state) => state.setShowingUserList);
+  const showingUserList = useClackState(
+    ClackEvents.userList,
+    (state) => state.gui.showingUserList
+  );
+  const setShowingUserList = getClackState(
+    (state) => state.gui.setShowingUserList
+  );
 
   return (
     <>

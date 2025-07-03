@@ -1,13 +1,16 @@
-import { useChatState } from "../state";
+import { useClackState, getClackState, ClackEvents } from "../state";
 
 import { useEffect } from "react";
 
 import useWebSocket from "react-use-websocket";
 
 export function Client() {
-  const onResponse = useChatState((state) => state.onResponse);
-  const requests = useChatState((state) => state.requests);
-  const popRequest = useChatState((state) => state.popRequest);
+  const onResponse = getClackState((state) => state.chat.onResponse);
+  const popRequest = getClackState((state) => state.chat.popRequest);
+  const requests = useClackState(
+    ClackEvents.requests,
+    (state) => state.chat.requests
+  );
 
   const uri = `ws://${window.location.host}/gateway`;
   const token = localStorage.getItem("token");
@@ -21,12 +24,9 @@ export function Client() {
     }
   }, [lastMessage]);
 
-  useEffect(() => {
-    if (requests.length === 0) return;
-    const request = popRequest();
-    console.log("Sending request", request);
-    sendMessage(JSON.stringify(request));
-  }, [requests]);
+  if (requests.length === 0) return;
+  const request = popRequest();
+  sendMessage(JSON.stringify(request));
 
   return <></>;
 }

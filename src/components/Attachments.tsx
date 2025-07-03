@@ -1,23 +1,27 @@
 import { useEffect, useRef, useState, useMemo } from "react";
 
-import { useChatState, useChatStateShallow } from "../state";
+import { useClackState, getClackState, ClackEvents } from "../state";
 
 import { IoMdEye, IoMdEyeOff, IoMdCreate } from "react-icons/io";
 import { BiSolidTrash } from "react-icons/bi";
 
 import { IconButton } from "./Common";
-import { GatewayPendingAttachment } from "../gateway";
-import { AttachmentType } from "../models";
-import { set } from "date-fns";
+import { ChatPendingAttachment } from "../state/chat";
+import { AttachmentType } from "../types";
 import { GetFileIcon } from "../util";
 
-export function UploadTile({ file }: { file: GatewayPendingAttachment }) {
+export function UploadTile({ file }: { file: ChatPendingAttachment }) {
   const [spoilered, setSpoilered] = useState(file.spoilered);
   const [filename, setFilename] = useState(file.filename);
 
-  const attachmentModal = useChatState((state) => state.attachmentModal);
-  const setAttachmentModal = useChatState((state) => state.setAttachmentModal);
-  const setAttachments = useChatState((state) => state.setAttachments);
+  const attachmentModal = useClackState(
+    ClackEvents.attachmentModal,
+    (state) => state.gui.attachmentModal
+  );
+  const setAttachmentModal = getClackState(
+    (state) => state.gui.setAttachmentModal
+  );
+  const setAttachments = getClackState((state) => state.chat.setAttachments);
 
   useEffect(() => {
     setFilename(file.filename);
@@ -109,15 +113,15 @@ export function UploadTile({ file }: { file: GatewayPendingAttachment }) {
 export function Attachments({ className }: { className?: string }) {
   const rowRef = useRef<HTMLDivElement>(null);
 
-  const currentFilesCount = useChatState(
-    (state) => state.gateway.currentFiles.length
+  const currentFiles = useClackState(
+    ClackEvents.current,
+    (state) => state.chat.currentFiles
   );
-  const currentFiles = useChatState((state) => state.gateway.currentFiles);
 
   return (
     <div id="upload-container" className={className}>
       <div ref={rowRef} className="upload-row input-scrollbar">
-        {currentFiles.map((file, index) => {
+        {currentFiles.map((file, _) => {
           return <UploadTile key={file.id} file={file} />;
         })}
       </div>

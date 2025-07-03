@@ -11,9 +11,6 @@ import {
   MessageType,
   Permissions,
   OverwriteType,
-} from "./models";
-
-import {
   EventType,
   ErrorCode,
   ErrorResponse,
@@ -33,9 +30,15 @@ import {
   MessageAddEvent,
   MessageUpdateEvent,
   MessageSendResponse,
-} from "./events";
+} from "../types";
 
-import { MakeSnowflake } from "./util";
+import { EmojiSearchByPartialName } from "../emoji";
+
+import fuzzysort from "fuzzysort";
+
+import { ClackEvents, updateClackState } from "../state";
+
+import { MakeSnowflake } from "../util";
 
 const previewURL = (message_id: Snowflake, id: Snowflake) =>
   `http://${window.location.host}/previews/${message_id}/${id}?type=thumbnail`;
@@ -50,19 +53,19 @@ const proxyURL = (message_id: Snowflake, id: Snowflake, url: string) =>
 const uploadURL = (slot: Snowflake) =>
   `http://${window.location.host}/upload/${slot}`;
 
-export interface GatewayChannelGroup {
+export interface ChatChannelGroup {
   category?: Snowflake;
   channels: Snowflake[];
 }
 
-export interface GatewayUserGroup {
+export interface ChatUserGroup {
   role: Snowflake;
   count: number;
   start: number;
   users: Snowflake[];
 }
 
-export interface GatewayPendingAttachment {
+export interface ChatPendingAttachment {
   id: Snowflake;
   file: File;
   spoilered: boolean;
@@ -72,12 +75,12 @@ export interface GatewayPendingAttachment {
   blobURL: string;
 }
 
-export class GatewayChannelState {
+export class ChatChannelState {
   messages: Snowflake[] = [];
 
   anchor?: Snowflake;
   editor: string = "";
-  attachments: GatewayPendingAttachment[] = [];
+  attachments: ChatPendingAttachment[] = [];
   replyingTo: Snowflake | undefined = undefined;
   jumpedTo: Snowflake | undefined = undefined;
 
@@ -90,7 +93,7 @@ export class GatewayChannelState {
   bottomSkeletons: Snowflake[] = this.makeSkeletons(25);
 
   pendingMessages: Snowflake[] = [];
-  pendingAttachments: Map<Snowflake, GatewayPendingAttachment[]> = new Map();
+  pendingAttachments: Map<Snowflake, ChatPendingAttachment[]> = new Map();
 
   makeSkeletons(count: number): Snowflake[] {
     const skeletons = [];
@@ -145,7 +148,6 @@ export class GatewayChannelState {
         this.anchor = msg.after;
       }
       var i = messages.indexOf(msg.before);
-      console.log(messages.length, i, msg.limit);
       if (i != msg.limit + 1) {
         this.firstMessage = messages[0];
       }
@@ -234,8 +236,8 @@ export class GatewayChannelState {
   constructor() {}
 }
 
-export class GatewayUserOrder {
-  groups: GatewayUserGroup[] = [];
+export class ChatUserOrder {
+  groups: ChatUserGroup[] = [];
   fetching: boolean = false;
 
   setRequest(req: UserListRequest) {
@@ -265,8 +267,6 @@ export class GatewayUserOrder {
         var endOverlap =
           endIndex >= group.start &&
           endIndex < group.start + group.users.length;
-
-        console.log(group.role, startOverlap, endOverlap);
 
         if (startOverlap && endOverlap) {
           // Do nothing
@@ -313,7 +313,7 @@ export class GatewayUserOrder {
   constructor() {}
 }
 
-export class GatewayRoleStore {
+export class ChatRoleStore {
   store: Map<Snowflake, Role> = new Map();
   order: Snowflake[] = [];
 
@@ -354,13 +354,13 @@ interface PendingMessage {
   marker: Snowflake;
   channel: Snowflake;
   message?: Snowflake;
-  attachments?: GatewayPendingAttachment[];
+  attachments?: ChatPendingAttachment[];
   progress?: number;
   size?: number;
   request?: XMLHttpRequest;
 }
 
-export const enum GatewayAuthState {
+export const enum ChatAuthState {
   Disconnected = 0,
   Login = 1,
   TryLogin = 2,
@@ -372,17 +372,17 @@ export const enum GatewayAuthState {
   Connected = 8,
 }
 
-export class Gateway {
+export class ChatState {
   users: Map<Snowflake, User> = new Map();
   channels: Map<Snowflake, Channel> = new Map();
-  roles: GatewayRoleStore = new GatewayRoleStore();
+  roles: ChatRoleStore = new ChatRoleStore();
   messages: Map<Snowflake, Message> = new Map();
 
-  channelGroups: GatewayChannelGroup[] = [];
-  userOrder: GatewayUserOrder = new GatewayUserOrder();
-  channelStates: Map<Snowflake, GatewayChannelState> = new Map();
+  channelGroups: ChatChannelGroup[] = [];
+  userOrder: ChatUserOrder = new ChatUserOrder();
+  channelStates: Map<Snowflake, ChatChannelState> = new Map();
 
-  authState: GatewayAuthState = GatewayAuthState.Disconnected;
+  authState: ChatAuthState = ChatAuthState.Disconnected;
   authError: ErrorResponse | undefined = undefined;
   error: ErrorResponse | undefined = undefined;
 
@@ -394,7 +394,7 @@ export class Gateway {
   currentMessages: Snowflake[] = [];
   currentMessagesIsCombined: Map<Snowflake, boolean> = new Map();
   currentEditor: string = "";
-  currentFiles: GatewayPendingAttachment[] = [];
+  currentFiles: ChatPendingAttachment[] = [];
   currentReplyingTo: Snowflake | undefined = undefined;
   currentJumpedTo: Snowflake | undefined = undefined;
   currentJumpToPresent: boolean = false;
@@ -405,125 +405,117 @@ export class Gateway {
 
   settings: SettingsResponse | undefined;
 
-  login(username: string, password: string) {
-    this.switchAuthState(GatewayAuthState.TryLogin);
+  login = (username: string, password: string) => {
+    this.switchAuthState(ChatAuthState.TryLogin);
 
-    const request: LoginRequest = {
-      username: username,
-      password: password,
-    };
-    const event = {
-      type: EventType.LoginRequest,
-      data: request,
-    };
+    const request: LoginRequest = { username, password };
+    const event = { type: EventType.LoginRequest, data: request };
+
     if (this.settings?.usesLoginCaptcha) {
       this.requestPendingCaptcha = event;
     } else {
-      this.requests.push(event);
+      this.pushRequest(event);
     }
-  }
+  };
 
-  register(
+  register = (
     username: string,
     password: string,
     email: string | undefined,
     inviteCode: string | undefined
-  ) {
-    this.switchAuthState(GatewayAuthState.TryRegister);
+  ) => {
+    this.switchAuthState(ChatAuthState.TryRegister);
 
-    const request: RegisterRequest = {
-      username: username,
-      password: password,
-      email: email,
-      inviteCode: inviteCode,
-    };
-    const event = {
-      type: EventType.RegisterRequest,
-      data: request,
-    };
+    const request: RegisterRequest = { username, password, email, inviteCode };
+    const event = { type: EventType.RegisterRequest, data: request };
+
     if (this.settings?.usesCaptcha) {
       this.requestPendingCaptcha = event;
     } else {
-      this.requests.push(event);
+      this.pushRequest(event);
     }
-  }
+  };
 
-  getPermissions(userID: Snowflake, channelID: Snowflake | undefined): number {
-    var allow = this.settings?.defaultPermissions ?? 0;
-    var deny = 0;
+  getPermissions = (
+    userID: Snowflake,
+    channelID: Snowflake | undefined
+  ): number => {
+    let allow = this.settings?.defaultPermissions ?? 0;
+    let deny = 0;
 
     const user = this.users.get(userID);
-    if (!user) {
-      return 0;
-    }
+    if (!user) return 0;
 
     for (const roleID of user.roles) {
       const role = this.roles.get(roleID);
-      if (role) {
-        allow |= role.permissions;
-      }
+      if (role) allow |= role.permissions;
     }
 
     if (channelID !== undefined) {
       const channel = this.channels.get(channelID);
       if (channel) {
-        for (const overwrite of channel.overwrites) {
-          if (overwrite.type === OverwriteType.Role) {
-            if (user.roles.includes(overwrite.id)) {
-              allow |= overwrite.allow;
-              deny |= overwrite.deny;
-            }
-          } else if (overwrite.type === OverwriteType.User) {
-            if (overwrite.id === userID) {
-              allow |= overwrite.allow;
-              deny |= overwrite.deny;
-            }
+        for (const overwrite of channel.overwrites ?? []) {
+          if (
+            overwrite.type === OverwriteType.Role &&
+            user.roles.includes(overwrite.id)
+          ) {
+            allow |= overwrite.allow;
+            deny |= overwrite.deny;
+          } else if (
+            overwrite.type === OverwriteType.User &&
+            overwrite.id === userID
+          ) {
+            allow |= overwrite.allow;
+            deny |= overwrite.deny;
           }
         }
       }
     }
 
-    var permissions = allow & ~deny;
-
-    if ((permissions & Permissions.Administrator) != 0) {
+    let permissions = allow & ~deny;
+    if ((permissions & Permissions.Administrator) !== 0) {
       return Permissions.All;
     }
-
     return permissions;
-  }
+  };
 
-  hasPermission(
+  hasPermission = (
     userID: Snowflake,
     channelID: Snowflake | undefined,
     permission: Permissions
-  ): boolean {
+  ): boolean => {
     const permissions = this.getPermissions(userID, channelID);
     return (permissions & permission) === permission;
-  }
+  };
 
-  finishCaptcha(captchaResponse: string | undefined) {
-    if (this.requestPendingCaptcha) {
-      if (captchaResponse == undefined) {
-        this.requestPendingCaptcha = undefined;
-        if (this.authState == GatewayAuthState.TryLogin) {
-          this.switchAuthState(GatewayAuthState.Login);
-        }
-        if (this.authState == GatewayAuthState.TryRegister) {
-          this.switchAuthState(GatewayAuthState.Register);
-        }
-        return;
-      } else {
-        this.requestPendingCaptcha.data.captchaResponse = captchaResponse;
-        this.requests.push(this.requestPendingCaptcha);
-        this.requestPendingCaptcha = undefined;
+  finishCaptcha = (captchaResponse: string | undefined) => {
+    if (!this.requestPendingCaptcha) return;
+
+    if (captchaResponse === undefined) {
+      this.requestPendingCaptcha = undefined;
+      if (this.authState === ChatAuthState.TryLogin) {
+        this.switchAuthState(ChatAuthState.Login);
       }
+      if (this.authState === ChatAuthState.TryRegister) {
+        this.switchAuthState(ChatAuthState.Register);
+      }
+      return;
     }
-  }
 
-  processChannels(channels: Channel[]) {
+    this.requestPendingCaptcha.data.captchaResponse = captchaResponse;
+    this.pushRequest(this.requestPendingCaptcha);
+    this.requestPendingCaptcha = undefined;
+  };
+
+  processRoles = (roles: Role[]) => {
+    this.roles.setRoles(roles);
+    updateClackState(ClackEvents.roleList);
+  };
+
+  processChannels = (channels: Channel[]) => {
     channels.forEach((channel) => {
       this.channels.set(channel.id, channel);
-      this.channelStates.set(channel.id, new GatewayChannelState());
+      this.channelStates.set(channel.id, new ChatChannelState());
     });
 
     channels.forEach((channel) => {
@@ -534,56 +526,44 @@ export class Gateway {
 
     this.channelGroups = [];
     const orphanChannels = Array.from(this.channels.values())
-      .filter(
-        (channel) =>
-          channel.type !== ChannelType.Category && channel.parent == undefined
-      )
+      .filter((ch) => ch.type !== ChannelType.Category && !ch.parent)
       .sort((a, b) => a.position - b.position);
 
-    if (orphanChannels.length > 0) {
-      this.channelGroups.push({
-        channels: orphanChannels.map((channel) => channel.id),
-      });
+    if (orphanChannels.length) {
+      this.channelGroups.push({ channels: orphanChannels.map((c) => c.id) });
     }
 
     const categories = Array.from(this.channels.values())
-      .filter(
-        (channel) =>
-          channel.type === ChannelType.Category && channel.parent == undefined
-      )
+      .filter((ch) => ch.type === ChannelType.Category && !ch.parent)
       .sort((a, b) => a.position - b.position);
 
     categories.forEach((category) => {
-      const channels = Array.from(this.channels.values())
+      const grouped = Array.from(this.channels.values())
         .filter(
-          (channel) =>
-            channel.type !== ChannelType.Category &&
-            channel.parent === category.id
+          (ch) => ch.type !== ChannelType.Category && ch.parent === category.id
         )
         .sort((a, b) => a.position - b.position);
-
       this.channelGroups.push({
         category: category.id,
-        channels: channels.map((channel) => channel.id),
+        channels: grouped.map((c) => c.id),
       });
     });
-  }
 
-  syncCurrent(state: GatewayChannelState) {
+    updateClackState(ClackEvents.channelList);
+  };
+
+  syncCurrent = (state: ChatChannelState) => {
     this.currentMessages = state.getMessageView();
-
     this.currentMessagesIsCombined.clear();
+
     for (let i = 1; i < this.currentMessages.length; i++) {
       const prev = this.messages.get(this.currentMessages[i - 1]);
       const curr = this.messages.get(this.currentMessages[i]);
-
       if (!prev || !curr) continue;
 
       const sameAuthor = curr.author === prev.author;
-      const deltaTime = curr.timestamp - prev.timestamp;
-
-      const combined = sameAuthor && deltaTime < 1000 * 60 * 5;
-
+      const combined =
+        sameAuthor && curr.timestamp - prev.timestamp < 1000 * 60 * 5;
       this.currentMessagesIsCombined.set(curr.id, combined);
     }
 
@@ -592,73 +572,72 @@ export class Gateway {
     this.currentReplyingTo = state.replyingTo;
     this.currentJumpedTo = state.jumpedTo;
     this.currentJumpToPresent =
-      state.lastMessage != state.messages[state.messages.length - 1];
-  }
+      state.lastMessage !== state.messages[state.messages.length - 1];
 
-  setChatScroll(top: Snowflake, center: Snowflake, bottom: Snowflake) {
-    if (this.currentChannel == undefined) {
-      return;
-    }
+    updateClackState(ClackEvents.current);
+  };
 
+  setChatScroll = (
+    top: Snowflake,
+    center: Snowflake,
+    bottom: Snowflake,
+    fetch: boolean
+  ) => {
+    console.log("SET CHAT SCROLL", fetch);
+    if (!this.currentChannel) return;
     const state = this.channelStates.get(this.currentChannel);
-
-    if (state == undefined) {
-      return;
-    }
+    if (!state) return;
 
     state.anchor = center;
-
     if (state.fetching) return;
 
     const topIdx = this.currentMessages.indexOf(top);
     const bottomIdx = this.currentMessages.indexOf(bottom);
-    const margin = 8 + 25;
+    const margin = 33; // 8 + 25
 
-    //console.log("Top", topIdx, "Bottom", bottomIdx);
-
-    if (topIdx >= 0 && topIdx < margin) {
-      if (state.messages[0] != state.firstMessage) {
-        state.fetching = true;
-        console.log("Fetching top");
-        this.requests.push({
-          type: EventType.MessagesRequest,
-          data: {
-            channel: this.currentChannel,
-            limit: 50,
-            before: state.messages[0],
-          },
-        });
-      }
+    if (
+      topIdx >= 0 &&
+      topIdx < margin &&
+      state.messages[0] !== state.firstMessage &&
+      fetch
+    ) {
+      state.fetching = true;
+      this.pushRequest({
+        type: EventType.MessagesRequest,
+        data: {
+          channel: this.currentChannel,
+          limit: 50,
+          before: state.messages[0],
+        },
+      });
     }
-    if (bottomIdx >= 0 && bottomIdx > this.currentMessages.length - margin) {
-      if (state.messages[state.messages.length - 1] != state.lastMessage) {
-        state.fetching = true;
-        console.log("Fetching bottom");
-        this.requests.push({
-          type: EventType.MessagesRequest,
-          data: {
-            channel: this.currentChannel,
-            limit: 50,
-            after: state.messages[state.messages.length - 1],
-          },
-        });
-      }
+    if (
+      bottomIdx >= 0 &&
+      bottomIdx > this.currentMessages.length - margin &&
+      state.messages[state.messages.length - 1] !== state.lastMessage &&
+      fetch
+    ) {
+      state.fetching = true;
+      this.pushRequest({
+        type: EventType.MessagesRequest,
+        data: {
+          channel: this.currentChannel,
+          limit: 50,
+          after: state.messages[state.messages.length - 1],
+        },
+      });
     }
-  }
+  };
 
-  getChatScroll() {
-    if (this.currentChannel == undefined) {
-      return undefined;
-    }
-
+  getChatScroll = (): Snowflake | undefined => {
+    if (!this.currentChannel) return undefined;
     return this.channelStates.get(this.currentChannel)!.anchor;
-  }
+  };
 
-  jumpToMessage(message: Snowflake | string | undefined) {
-    if (this.currentChannel == undefined) return;
-
+  jumpToMessage = (message: Snowflake | string | undefined) => {
+    if (!this.currentChannel) return;
     const state = this.channelStates.get(this.currentChannel);
-    if (state == undefined) return;
+    if (!state) return;
 
     if (message === undefined) {
       if (state.jumpedTo === undefined) return;
@@ -670,12 +649,9 @@ export class Gateway {
     if (message === "bottom") {
       state.clear();
       state.fetching = true;
-      this.requests.push({
+      this.pushRequest({
         type: EventType.MessagesRequest,
-        data: {
-          channel: this.currentChannel,
-          limit: 50,
-        },
+        data: { channel: this.currentChannel, limit: 50 },
       });
       this.syncCurrent(state);
       return;
@@ -685,189 +661,146 @@ export class Gateway {
     state.jumpedTo = message;
     if (!state.messages.includes(message)) {
       state.messages = [];
-      if (this.messages.has(message)) {
-        state.messages.push(message);
-      }
+      if (this.messages.has(message as Snowflake))
+        state.messages.push(message as Snowflake);
       state.fetching = true;
-      this.requests.push({
+      this.pushRequest({
         type: EventType.MessagesRequest,
         data: {
+          channel: this.currentChannel,
           before: message,
           after: message,
-          channel: this.currentChannel,
           limit: 50,
         },
       });
     }
 
     this.syncCurrent(state);
-  }
+  };
 
-  setUserScroll(
+  setUserScroll = (
     topGroup: Snowflake,
     topIndex: number,
     bottomGroup: Snowflake,
     bottomIndex: number
-  ) {
-    console.log("USER SCROLL", topGroup, topIndex, bottomGroup, bottomIndex);
-
+  ) => {
     if (this.userOrder.fetching) return;
-
-    var req: UserListRequest = {
+    const req: UserListRequest = {
       startGroup: topGroup,
       startIndex: topIndex,
       endGroup: bottomGroup,
       endIndex: bottomIndex,
     };
-
     this.userOrder.setRequest(req);
+    this.pushRequest({ type: EventType.UserListRequest, data: req });
+  };
 
-    this.requests.push({
-      type: EventType.UserListRequest,
-      data: req,
-    });
-  }
-
-  setEditorState(editor: string) {
-    if (this.currentChannel == undefined) return;
+  setEditorState = (editor: string) => {
+    if (!this.currentChannel) return;
     const state = this.channelStates.get(this.currentChannel);
-    if (state == undefined) return;
+    if (!state) return;
 
     state.editor = editor;
+    // no need to sync each keystroke
+  };
 
-    // Dont pointlessly re-render on every keystroke
-    //this.syncCurrent(state);
-  }
-
-  setAttachments(
-    add: GatewayPendingAttachment[],
-    remove: GatewayPendingAttachment[],
-    update: GatewayPendingAttachment[]
-  ) {
-    if (this.currentChannel == undefined) return;
+  setAttachments = (
+    add: ChatPendingAttachment[],
+    remove: ChatPendingAttachment[],
+    update: ChatPendingAttachment[]
+  ) => {
+    if (!this.currentChannel) return;
     const state = this.channelStates.get(this.currentChannel);
-    if (state == undefined) return;
+    if (!state) return;
 
-    if (add.length > 0) {
-      for (const file of add) {
+    if (add.length)
+      add.forEach((file) => {
         file.blobURL = URL.createObjectURL(file.file);
-      }
-
-      state.attachments.push(...add);
-    }
-
-    if (remove.length > 0) {
-      for (const file of remove) {
-        URL.revokeObjectURL(file.blobURL);
-      }
-
+        state.attachments.push(file);
+      });
+    if (remove.length)
+      remove.forEach((file) => URL.revokeObjectURL(file.blobURL));
+    if (remove.length)
       state.attachments = state.attachments.filter((f) => !remove.includes(f));
-    }
-
-    if (update.length > 0) {
-      console.log("Updating files", update);
-      for (const file of update) {
-        const index = state.attachments.findIndex((f) => f.id === file.id);
-        if (index !== -1) {
-          console.log("Updating file", file.id);
-          state.attachments[index] = file;
-        }
-      }
-
-      state.attachments = [...state.attachments];
-    }
+    if (update.length)
+      update.forEach((file) => {
+        const idx = state.attachments.findIndex((f) => f.id === file.id);
+        if (idx !== -1) state.attachments[idx] = file;
+      });
 
     this.syncCurrent(state);
-  }
+  };
 
-  setReplyingTo(message: Snowflake | undefined) {
+  setReplyingTo = (message: Snowflake | undefined) => {
     const state = this.channelStates.get(this.currentChannel ?? "");
-
-    if (state === undefined) return;
-
+    if (!state) return;
     state.replyingTo = message;
-
     this.syncCurrent(state);
-  }
+  };
 
-  changeChannel(channel: Snowflake) {
+  changeChannel = (channel: Snowflake) => {
     this.currentChannel = channel;
-
-    const state = this.channelStates.get(this.currentChannel);
-
-    if (state == undefined) return;
-
+    const state = this.channelStates.get(channel);
+    if (!state) return;
     this.syncCurrent(state);
-
-    if (state.messages.length === 0) {
-      this.requests.push({
+    if (!state.messages.length) {
+      this.pushRequest({
         type: EventType.MessagesRequest,
-        data: {
-          channel: this.currentChannel,
-          limit: 50,
-        },
+        data: { channel, limit: 50 },
       });
     }
-  }
+  };
 
-  sendMessage(content: string) {
-    if (this.currentUser == undefined || this.currentChannel == undefined) {
-      return;
-    }
+  sendMessage = (content: string) => {
+    if (!this.currentUser || !this.currentChannel) return;
+    const marker = MakeSnowflake();
+    const state = this.channelStates.get(this.currentChannel)!;
 
-    var marker = MakeSnowflake();
-    var state = this.channelStates.get(this.currentChannel)!;
-
-    var attachments = state.attachments;
+    const attachments = state.attachments;
     state.attachments = [];
 
-    var reference = state.replyingTo;
+    const reference = state.replyingTo;
     state.replyingTo = undefined;
 
-    var request: MessageSendRequest = {
+    const request: MessageSendRequest = {
       channel: this.currentChannel,
-      content: content,
-      reference: reference,
+      content,
+      reference,
       attachmentCount: attachments.length,
     };
-
-    var msg: Message = {
+    const msg: Message = {
       id: marker,
       type: MessageType.Default,
       author: this.currentUser,
       channel: this.currentChannel,
-      content: content,
+      content,
       timestamp: Date.now(),
     };
 
     this.messages.set(marker, msg);
-
     state.addPendingMessage(marker);
     this.pendingMessages.set(marker, {
-      marker: marker,
+      marker,
       channel: this.currentChannel,
-      attachments: attachments,
+      attachments,
       progress: 0,
-      size: attachments.reduce((acc, att) => acc + att.file.size, 0),
+      size: attachments.reduce((acc, a) => acc + a.file.size, 0),
     });
 
     this.syncCurrent(state);
-
-    this.requests.push({
+    this.pushRequest({
       type: EventType.MessageSendRequest,
       seq: marker,
       data: request,
     });
-  }
+  };
 
-  onSendMessageResponse(msg: MessageSendResponse, seq: Snowflake) {
-    console.log("SendMessageResponse", msg);
-    var pending = this.pendingMessages.get(seq);
-    if (pending == undefined) return;
-
+  onSendMessageResponse = (msg: MessageSendResponse, seq: Snowflake) => {
+    const pending = this.pendingMessages.get(seq);
+    if (!pending) return;
     if (msg.slot) {
-      var form = new FormData();
-      pending.attachments?.forEach((att, i) => {
+      const form = new FormData();
+      pending.attachments!.forEach((att, i) => {
         form.append(
           `metadata_${i}`,
           JSON.stringify({
@@ -876,202 +809,126 @@ export class Gateway {
             size: att.file.size,
           })
         );
-
         form.append(`file_${i}`, att.file, att.filename);
       });
-
       const xhr = new XMLHttpRequest();
       xhr.open("POST", uploadURL(msg.slot), true);
-
       xhr.upload.addEventListener("progress", (e) => {
-        if (e.lengthComputable) {
-          const percent = (e.loaded / e.total) * 100;
-
-          const pending = this.pendingMessages.get(seq);
-          if (pending) {
-            console.log("UPLOAD PROGRESS", pending.progress, "TO", percent);
-            pending.progress = percent;
-          }
-        }
+        if (e.lengthComputable) pending.progress = (e.loaded / e.total) * 100;
       });
-
-      xhr.addEventListener("load", () => {
-        console.log("Upload complete, status:", xhr.status);
-      });
-      xhr.addEventListener("error", () => {
-        console.error("Upload failed");
-      });
-
+      xhr.addEventListener("load", () =>
+        console.log("Upload complete", xhr.status)
+      );
+      xhr.addEventListener("error", () => console.error("Upload failed"));
       xhr.send(form);
       pending.request = xhr;
     } else {
       pending.message = msg.message;
     }
-  }
+  };
 
-  cancelMessage(seq: Snowflake) {
-    var pending = this.pendingMessages.get(seq);
-    if (pending == undefined) return;
-
-    if (pending.request) {
-      pending.request.abort();
-    }
-
+  cancelMessage = (seq: Snowflake) => {
+    const pending = this.pendingMessages.get(seq);
+    if (!pending) return;
+    if (pending.request) pending.request.abort();
     this.pendingMessages.delete(seq);
 
     const state = this.channelStates.get(pending.channel);
-    if (state == undefined) return;
-
+    if (!state) return;
     state.pendingMessages = state.pendingMessages.filter((m) => m !== seq);
-
     this.syncCurrent(state);
-  }
+  };
 
-  updateMessage(message: Snowflake, content: string) {
-    this.requests.push({
+  updateMessage = (message: Snowflake, content: string) => {
+    this.pushRequest({
       type: EventType.MessageUpdate,
-      data: {
-        message: message,
-        content: content,
-      },
+      data: { message, content },
     });
-    this.pendingMessages.set(message, {
-      marker: message,
-      channel: "",
-    });
-  }
+    this.pendingMessages.set(message, { marker: message, channel: "" });
+  };
 
-  deleteMessage(message: Snowflake) {
-    this.requests.push({
-      type: EventType.MessageDelete,
-      data: {
-        message: message,
-      },
-    });
-  }
+  deleteMessage = (message: Snowflake) => {
+    this.pushRequest({ type: EventType.MessageDelete, data: { message } });
+  };
 
-  addReaction(message: Snowflake, emoji: Snowflake) {
+  addReaction = (message: Snowflake, emoji: Snowflake) => {
     if (!this.messages.has(message)) return;
-
-    if (this.messages.get(message)!.reactions === undefined) {
-      this.messages.get(message)!.reactions = [];
-    }
-    var reactions = this.messages.get(message)!.reactions!;
-    var emojiReaction = reactions.find((r) => r.emoji === emoji);
-    if (emojiReaction) {
-      if (emojiReaction.me === true) return;
-      emojiReaction.me = true;
-      emojiReaction.count++;
-      if (emojiReaction.users.length < 5) {
-        emojiReaction.users.push(this.currentUser!);
-      }
+    const reactions = (this.messages.get(message)!.reactions ||= []);
+    let react = reactions.find((r) => r.emoji === emoji);
+    if (react) {
+      if (react.me) return;
+      react.me = true;
+      react.count++;
+      if (react.users.length < 5) react.users.push(this.currentUser!);
     } else {
-      emojiReaction = {
-        emoji: emoji,
-        users: [this.currentUser!],
-        count: 1,
-        me: true,
-      };
-      reactions.push(emojiReaction);
+      reactions.push({ emoji, users: [this.currentUser!], count: 1, me: true });
     }
-
-    this.requests.push({
+    this.pushRequest({
       type: EventType.MessageReactionAdd,
-      data: {
-        message: message,
-        emoji: emoji,
-      },
+      data: { message, emoji },
     });
-  }
+  };
 
-  deleteReaction(message: Snowflake, emoji: string) {
-    this.requests.push({
+  deleteReaction = (message: Snowflake, emoji: string) => {
+    this.pushRequest({
       type: EventType.MessageReactionDelete,
-      data: {
-        message: message,
-        emoji: emoji,
-      },
+      data: { message, emoji },
     });
-  }
+  };
 
-  onOverview(msg: OverviewResponse) {
-    console.log("Overview", msg);
-    this.roles.setRoles(msg.roles);
-
+  onOverview = (msg: OverviewResponse) => {
+    this.processRoles(msg.roles);
     this.processChannels(msg.channels);
-
     this.processUsers(msg.users);
-
     this.onUserList(msg.userList);
-
     this.currentUser = msg.you.id;
     this.processUsers([msg.you]);
-
-    if (this.currentChannel == undefined) {
+    if (!this.currentChannel) {
       for (const group of this.channelGroups) {
-        if (group.channels.length > 0) {
+        if (group.channels.length) {
           this.changeChannel(group.channels[0]);
           break;
         }
       }
     }
+    this.switchAuthState(ChatAuthState.Connected);
+  };
 
-    this.switchAuthState(GatewayAuthState.Connected);
-  }
-
-  onSettings(msg: SettingsResponse) {
-    console.log("Site", msg);
+  onSettings = (msg: SettingsResponse) => {
     this.settings = msg;
+    updateClackState(ClackEvents.settings);
 
-    if (msg.authenticated) {
-      this.switchAuthState(GatewayAuthState.Loading);
-    } else {
-      this.switchAuthState(GatewayAuthState.Login);
-    }
-  }
+    this.switchAuthState(
+      msg.authenticated ? ChatAuthState.Loading : ChatAuthState.Login
+    );
+  };
 
-  onToken(msg: TokenResponse) {
-    console.log("Token", msg, this.authState);
-
+  onToken = (msg: TokenResponse) => {
     localStorage.setItem("token", msg.token);
+    if (this.authState === ChatAuthState.TryLogin)
+      this.switchAuthState(ChatAuthState.OkLogin);
+    if (this.authState === ChatAuthState.TryRegister)
+      this.switchAuthState(ChatAuthState.OkRegister);
+  };
 
-    if (this.authState == GatewayAuthState.TryLogin) {
-      this.switchAuthState(GatewayAuthState.OkLogin);
-    }
-
-    if (this.authState == GatewayAuthState.TryRegister) {
-      this.switchAuthState(GatewayAuthState.OkRegister);
-    }
-  }
-
-  onError(msg: ErrorResponse) {
-    if (this.authState == GatewayAuthState.TryLogin) {
-      this.switchAuthState(GatewayAuthState.Login, msg);
-      return;
-    }
-
-    if (this.authState == GatewayAuthState.TryRegister) {
-      this.switchAuthState(GatewayAuthState.Register, msg);
-      return;
-    }
-
-    if (msg.code === ErrorCode.InvalidToken) {
-      this.switchAuthState(GatewayAuthState.Loading);
-      return;
-    }
-
+  onError = (msg: ErrorResponse) => {
+    if (this.authState === ChatAuthState.TryLogin)
+      return this.switchAuthState(ChatAuthState.Login, msg);
+    if (this.authState === ChatAuthState.TryRegister)
+      return this.switchAuthState(ChatAuthState.Register, msg);
+    if (msg.code === ErrorCode.InvalidToken)
+      return this.switchAuthState(ChatAuthState.Loading);
     this.error = msg;
-  }
+  };
 
-  switchAuthState(authState: GatewayAuthState, error?: ErrorResponse) {
+  switchAuthState = (authState: ChatAuthState, error?: ErrorResponse) => {
     this.authState = authState;
     this.authError = error;
-  }
+    updateClackState(ClackEvents.auth);
+  };
 
-  processMessages(messages: Message[]) {
-    for (let i = 0; i < messages.length; i++) {
-      const m = messages[i];
-
+  processMessages = (messages: Message[]) => {
+    messages.forEach((m) => {
       for (const a of m.attachments ?? []) {
         if (a.type !== AttachmentType.File) {
           a.previewURL = previewURL(m.id, a.id);
@@ -1080,14 +937,14 @@ export class Gateway {
         a.originalURL = originalURL(m.id, a.id, a.filename);
       }
       for (const e of m.embeds ?? []) {
-        var media = [
+        const media = [
           e.image,
           e.thumbnail,
           e.author?.icon,
           e.footer?.icon,
           e.video,
         ];
-        for (var d of media) {
+        media.forEach((d) => {
           if (d) {
             d.type = AttachmentType.Image;
             d.previewURL = previewURL(m.id, d.id);
@@ -1095,194 +952,211 @@ export class Gateway {
             d.proxyURL = proxyURL(m.id, e.id, d.url);
             d.originalURL = d.url;
           }
-        }
-        if (e.video) {
-          e.video.type = AttachmentType.Video;
-        }
+        });
+        if (e.video) e.video.type = AttachmentType.Video;
       }
-      for (const r of m.reactions ?? []) {
+      for (const r of m.reactions ?? [])
         r.me = r.users.includes(this.currentUser ?? "");
-      }
-
       this.messages.set(m.id, m);
-    }
-  }
-
-  processUsers(users: User[]) {
-    for (let user of users) {
-      this.users.set(user.id, user);
-
-      var color: number | undefined = undefined;
-      var colorPosition = Number.MAX_VALUE;
-
-      for (let role of user.roles) {
-        const r = this.roles.get(role);
-        if (r && r.color && r.position < colorPosition) {
-          color = r.color;
-          colorPosition = r.position;
-        }
-      }
-
-      user.color = color;
-    }
-  }
-
-  onMessages(msg: MessagesResponse) {
-    var messages = [...msg.messages, ...(msg.references ?? [])];
-
-    this.processMessages(messages);
-
-    var unknownUsers: Snowflake[] = [];
-
-    messages.forEach((message) => {
-      if (!this.users.has(message.author)) {
-        unknownUsers.push(message.author);
-      }
+      updateClackState(ClackEvents.message(m.id));
     });
+  };
 
-    if (unknownUsers.length > 0) {
-      console.log("USERS REQUEST", unknownUsers.length);
-      this.requests.push({
-        type: EventType.UsersRequest,
-        data: {
-          users: unknownUsers,
-        },
+  processUsers = (users: User[]) => {
+    users.forEach((user) => {
+      this.users.set(user.id, user);
+      let color: number | undefined;
+      let pos = Number.MAX_VALUE;
+      user.roles.forEach((roleId) => {
+        const r = this.roles.get(roleId);
+        if (r?.color && r.position < pos) {
+          color = r.color;
+          pos = r.position;
+        }
       });
-    }
+      user.color = color;
+      updateClackState(ClackEvents.user(user.id));
+    });
+  };
 
+  onMessages = (msg: MessagesResponse) => {
+    console.log("ON MESSAGES", msg.channel, msg.messages.length);
+    const all = [...msg.messages, ...(msg.references ?? [])];
+    this.processMessages(all);
+    const unknown: Snowflake[] = [];
+    all.forEach((m) => {
+      if (!this.users.has(m.author)) unknown.push(m.author);
+    });
+    if (unknown.length)
+      this.pushRequest({
+        type: EventType.UsersRequest,
+        data: { users: unknown },
+      });
     const state = this.channelStates.get(msg.channel);
-    if (state == undefined) {
-      return;
-    }
-
+    if (!state) return;
     state.fetching = false;
-
     state.addMessages(msg);
+    if (this.currentChannel === msg.channel) this.syncCurrent(state);
+  };
 
-    if (this.currentChannel == msg.channel) {
-      this.syncCurrent(state);
-    }
-  }
-
-  onMessageAdd(msg: MessageAddEvent) {
-    console.log("MessageAdd", msg);
-
+  onMessageAdd = (msg: MessageAddEvent) => {
     this.processMessages([msg.message]);
-    if (msg.reference) {
-      this.processMessages([msg.reference]);
-    }
-
+    if (msg.reference) this.processMessages([msg.reference]);
     this.processUsers([msg.author]);
-
     const state = this.channelStates.get(msg.message.channel);
-    if (state == undefined) {
-      return;
-    }
+    if (!state) return;
 
-    console.log("Adding message", msg.message.id);
-
-    var marker: Snowflake | undefined = undefined;
-
+    let marker: Snowflake | undefined;
     for (const m of this.pendingMessages.values()) {
-      if (m.message == msg.message.id) {
+      if (m.message === msg.message.id) {
         marker = m.marker;
         break;
       }
     }
-
-    if (marker != undefined) {
-      this.pendingMessages.delete(marker);
-    }
-
+    if (marker) this.pendingMessages.delete(marker);
     state.addMessage(msg.message, marker);
+    if (this.currentChannel === msg.message.channel) this.syncCurrent(state);
+  };
 
-    if (this.currentChannel == msg.message.channel) {
-      this.syncCurrent(state);
-    }
-  }
-
-  onMessageUpdate(msg: MessageUpdateEvent) {
-    console.log("MessageUpdate", msg);
+  onMessageUpdate = (msg: MessageUpdateEvent) => {
     this.processMessages([msg.message]);
     this.messages.set(msg.message.id, msg.message);
-
-    if (this.pendingMessages.has(msg.message.id)) {
+    if (this.pendingMessages.has(msg.message.id))
       this.pendingMessages.delete(msg.message.id);
-    }
-  }
+  };
 
-  onMessageDelete(msg: MessageDeleteEvent) {
-    console.log("MessageDelete", msg);
+  onMessageDelete = (msg: MessageDeleteEvent) => {
+    const channel = this.messages.get(msg.message)?.channel;
     this.messages.delete(msg.message);
-    const state = this.channelStates.get(msg.message);
-    if (state == undefined) {
-      return;
-    }
-    state.messages = state.messages.filter((m) => m !== msg.message);
-    state.pendingMessages = state.pendingMessages.filter(
-      (m) => m !== msg.message
-    );
-    if (this.currentChannel == msg.message) {
-      this.syncCurrent(state);
-    }
-    this.pendingMessages.forEach((pending, key) => {
-      if (pending.message === msg.message) {
-        this.pendingMessages.delete(key);
-      }
-    });
-  }
 
-  onUsers(msg: UsersResponse) {
-    console.log("USERS RESPONSE", Date.now(), msg.users);
+    if (!channel) return;
+    const state = this.channelStates.get(channel);
+
+    if (state) {
+      state.messages = state.messages.filter((m) => m !== msg.message);
+      state.pendingMessages = state.pendingMessages.filter(
+        (m) => m !== msg.message
+      );
+      if (this.currentChannel === msg.message) this.syncCurrent(state);
+    }
+    for (const [key, pending] of this.pendingMessages) {
+      if (pending.message === msg.message) this.pendingMessages.delete(key);
+    }
+
+    updateClackState(ClackEvents.message(msg.message));
+  };
+
+  onUsers = (msg: UsersResponse) => {
     this.processUsers(msg.users);
-  }
+  };
 
-  onUserList(msg: UserListResponse) {
+  onUserList = (msg: UserListResponse) => {
     this.userOrder.setResponse(msg);
-
-    var unknownUsers: Snowflake[] = [];
-
-    msg.groups.forEach((group) => {
-      for (const user of group.users) {
-        if (!this.users.has(user)) {
-          unknownUsers.push(user);
-        }
-      }
-    });
-
-    if (unknownUsers.length > 0) {
-      this.requests.push({
+    const unknown: Snowflake[] = [];
+    msg.groups.forEach((g) =>
+      g.users.forEach((u) => {
+        if (!this.users.has(u)) unknown.push(u);
+      })
+    );
+    if (unknown.length)
+      this.pushRequest({
         type: EventType.UsersRequest,
-        data: {
-          users: unknownUsers,
-        },
+        data: { users: unknown },
       });
-    }
-  }
 
-  onResponse(msg: any) {
-    if (msg.type === EventType.SettingsResponse) {
-      this.onSettings(msg.data);
-    } else if (msg.type === EventType.TokenResponse) {
-      this.onToken(msg.data);
-    } else if (msg.type === EventType.OverviewResponse) {
-      this.onOverview(msg.data);
-    } else if (msg.type === EventType.MessagesResponse) {
-      this.onMessages(msg.data);
-    } else if (msg.type === EventType.UsersResponse) {
-      this.onUsers(msg.data);
-    } else if (msg.type === EventType.UserListResponse) {
-      this.onUserList(msg.data);
-    } else if (msg.type === EventType.MessageSendResponse) {
+    updateClackState(ClackEvents.userList);
+  };
+
+  searchEmojis = (query: string): Emoji[] => {
+    if (query.length <= 1 || !/^[a-z0-9_]+$/.test(query)) return [];
+    return EmojiSearchByPartialName(query)
+      .slice(0, 50)
+      .map((e) => ({ id: "", name: e.symbol }));
+  };
+
+  searchUsers = (query: string): User[] => {
+    const lower = query.toLowerCase();
+    const scored: { user: User; score: number }[] = [];
+    this.users.forEach((user) => {
+      const uname = user.username.toLowerCase();
+      const nick = user.nickname?.toLowerCase() || "";
+      const score = Math.max(
+        fuzzysort.single(lower, uname)?.score || 0,
+        fuzzysort.single(lower, nick)?.score || 0
+      );
+      if (score > 0 || query.length === 0) scored.push({ user, score });
+    });
+    return scored.sort((a, b) => b.score - a.score).map((r) => r.user);
+  };
+
+  searchChannels = (query: string): Channel[] => {
+    const lower = query.toLowerCase();
+    const scored: { channel: Channel; score: number }[] = [];
+    this.channels.forEach((ch) => {
+      if (ch.type === ChannelType.Category) return;
+      const name = ch.name.toLowerCase();
+      const score = fuzzysort.single(lower, name)?.score || 0;
+      if (score > 0 || query.length === 0) scored.push({ channel: ch, score });
+    });
+    return scored.sort((a, b) => b.score - a.score).map((r) => r.channel);
+  };
+
+  searchRoles = (query: string): Role[] => {
+    const lower = query.toLowerCase();
+    const scored: { role: Role; score: number }[] = [];
+    this.roles.store.forEach((role) => {
+      const name = role.name.toLowerCase();
+      const score = fuzzysort.single(lower, name)?.score || 0;
+      if (score > 0 || query.length === 0) scored.push({ role, score });
+    });
+    return scored.sort((a, b) => b.score - a.score).map((r) => r.role);
+  };
+
+  lookupUser = (name?: string, id?: string): User | undefined => {
+    if (id) return this.users.get(id);
+    if (name)
+      return [...this.users.values()].find(
+        (u) => u.username === name || u.nickname === name
+      );
+  };
+
+  lookupChannel = (name?: string, id?: string): Channel | undefined => {
+    if (id) return this.channels.get(id);
+    if (name) return [...this.channels.values()].find((c) => c.name === name);
+  };
+
+  lookupRole = (name?: string, id?: string): Role | undefined => {
+    if (id) return this.roles.get(id);
+    if (name)
+      return [...this.roles.store.values()].find((r) => r.name === name);
+  };
+
+  pushRequest = (request: any) => {
+    this.requests.push(request);
+    updateClackState(ClackEvents.requests);
+  };
+
+  popRequest = (): any => {
+    if (!this.requests.length) return undefined;
+    const value = this.requests.pop();
+    updateClackState(ClackEvents.requests);
+    return value;
+  };
+
+  onResponse = (msg: any) => {
+    if (msg.type === EventType.SettingsResponse) this.onSettings(msg.data);
+    else if (msg.type === EventType.TokenResponse) this.onToken(msg.data);
+    else if (msg.type === EventType.OverviewResponse) this.onOverview(msg.data);
+    else if (msg.type === EventType.MessagesResponse) this.onMessages(msg.data);
+    else if (msg.type === EventType.UsersResponse) this.onUsers(msg.data);
+    else if (msg.type === EventType.UserListResponse) this.onUserList(msg.data);
+    else if (msg.type === EventType.MessageSendResponse)
       this.onSendMessageResponse(msg.data, msg.seq);
-    } else if (msg.type === EventType.MessageDelete) {
+    else if (msg.type === EventType.MessageDelete)
       this.onMessageDelete(msg.data);
-    } else if (msg.type === EventType.MessageAdd) {
-      this.onMessageAdd(msg.data);
-    } else if (msg.type === EventType.MessageUpdate) {
+    else if (msg.type === EventType.MessageAdd) this.onMessageAdd(msg.data);
+    else if (msg.type === EventType.MessageUpdate)
       this.onMessageUpdate(msg.data);
-    } else if (msg.type === EventType.ErrorResponse) {
-      this.onError(msg.data);
-    }
-  }
+    else if (msg.type === EventType.ErrorResponse) this.onError(msg.data);
+  };
 }

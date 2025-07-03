@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState, useMemo } from "react";
 
-import { useChatState, useChatStateShallow } from "../state";
+import {
+  useClackState,
+  useClackStateDynamic,
+  getClackState,
+  ClackEvents,
+} from "../state";
 
 import {
   MdMic,
@@ -10,7 +15,7 @@ import {
   MdSettings,
 } from "react-icons/md";
 
-import { User, UserStatus } from "../models";
+import { User, UserStatus } from "../types";
 
 import { UserAvatarSVG } from "./Users";
 import { IconButton } from "./Common";
@@ -19,15 +24,16 @@ export default function You() {
   const [muted, setMuted] = useState(false);
   const [deafened, setDeafened] = useState(false);
 
-  const userID = useChatState((state) => {
-    return state.gateway.currentUser;
+  const user = useClackStateDynamic((state, keys) => {
+    keys.push(ClackEvents.current);
+    if (!state.chat.currentUser) {
+      return undefined;
+    }
+    keys.push(ClackEvents.user(state.chat.currentUser));
+    return state.chat.users.get(state.chat.currentUser);
   });
 
-  const user = useChatStateShallow((state) => {
-    return state.gateway.users.get(userID ?? "");
-  });
-
-  const setTooltipPopup = useChatState((state) => state.setTooltipPopup);
+  const setTooltipPopup = getClackState((state) => state.gui.setTooltipPopup);
 
   if (!user) {
     return <></>;

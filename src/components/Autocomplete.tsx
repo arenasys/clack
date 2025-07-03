@@ -9,9 +9,9 @@ import {
 
 import { HiOutlineHashtag } from "react-icons/hi";
 
-import { useChatState, useChatStateShallow } from "../state";
+import { useClackState, getClackState, ClackEvents } from "../state";
 
-import { User, Role, Channel, Emoji } from "../models";
+import { User, Role, Channel, Emoji } from "../types";
 
 import { FormatColor } from "../util";
 
@@ -43,10 +43,10 @@ export const Autocomplete = forwardRef(function Autocomplete(
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const searchEmojis = useChatState((state) => state.searchEmojis);
-  const searchUsers = useChatState((state) => state.searchUsers);
-  const searchRoles = useChatState((state) => state.searchRoles);
-  const searchChannels = useChatState((state) => state.searchChannels);
+  const searchEmojis = getClackState((state) => state.chat.searchEmojis);
+  const searchUsers = getClackState((state) => state.chat.searchUsers);
+  const searchRoles = getClackState((state) => state.chat.searchRoles);
+  const searchChannels = getClackState((state) => state.chat.searchChannels);
 
   function getResultsLength() {
     return (

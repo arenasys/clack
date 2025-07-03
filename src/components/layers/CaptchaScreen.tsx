@@ -1,18 +1,18 @@
 import React, { useState, useEffect } from "react";
 
-import { useChatState, useChatStateShallow } from "../../state";
+import { useClackState, getClackState, ClackEvents } from "../../state";
 
 import HCaptcha from "@hcaptcha/react-hcaptcha";
 
 export default function CaptchaScreen() {
-  const captchaSiteKey = useChatState((state) => {
-    return state.gateway.settings?.captchaSiteKey ?? "";
+  const captchaSiteKey = useClackState(ClackEvents.settings, (state) => {
+    return state.chat.settings?.captchaSiteKey ?? "";
   });
-  const needCaptcha = useChatState((state) => {
-    return state.gateway.requestPendingCaptcha !== undefined;
+  const needCaptcha = useClackState(ClackEvents.captcha, (state) => {
+    return state.chat.requestPendingCaptcha !== undefined;
   });
-  const finishCaptcha = useChatState((state) => {
-    return state.finishCaptcha;
+  const finishCaptcha = getClackState((state) => {
+    return state.chat.finishCaptcha;
   });
 
   if (!needCaptcha) {

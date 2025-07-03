@@ -8,7 +8,7 @@ import {
   useImperativeHandle,
 } from "react";
 
-import { useChatState, useChatStateShallow } from "../state";
+import { useClackState, getClackState, ClackEvents } from "../state";
 import { GetTooltipPosition } from "../util";
 import { point } from "slate";
 
@@ -26,8 +26,10 @@ export function IconButton({
   onClick?: (rect: DOMRect) => void;
 }) {
   const ref = useRef<HTMLButtonElement>(null);
-  const setTooltipPopup = useChatState((state) => state.setTooltipPopup);
-  const clearTooltipPopup = useChatState((state) => state.clearTooltipPopup);
+  const setTooltipPopup = getClackState((state) => state.gui.setTooltipPopup);
+  const clearTooltipPopup = getClackState(
+    (state) => state.gui.clearTooltipPopup
+  );
 
   const tooltipIndexRef = useRef<number | null>(null);
 
@@ -97,8 +99,10 @@ export function TooltipWrapper({
   className?: string;
 } & React.HTMLAttributes<HTMLSpanElement>) {
   const ref = useRef<HTMLSpanElement>(null);
-  const setTooltipPopup = useChatState((state) => state.setTooltipPopup);
-  const clearTooltipPopup = useChatState((state) => state.clearTooltipPopup);
+  const setTooltipPopup = getClackState((state) => state.gui.setTooltipPopup);
+  const clearTooltipPopup = getClackState(
+    (state) => state.gui.clearTooltipPopup
+  );
 
   const tooltipIndexRef = useRef<number | null>(null);
 

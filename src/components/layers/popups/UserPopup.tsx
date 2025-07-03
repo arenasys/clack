@@ -1,5 +1,10 @@
 import { useEffect, useState, useRef } from "react";
-import { useChatState, useChatStateShallow } from "../../../state";
+import {
+  useClackState,
+  getClackState,
+  ClackEvents,
+  useClackStateDynamic,
+} from "../../../state";
 import { UserAvatarBigSVG } from "../../Users";
 
 import { FormatColor } from "../../../util";
@@ -7,12 +12,17 @@ import { ClickWrapper } from "../../Common";
 
 export default function UserPopup() {
   const ref = useRef<HTMLDivElement>(null);
-  const userPopup = useChatState((state) => state.userPopup);
-  const setUserPopup = useChatState((state) => state.setUserPopup);
-
-  const userRoles = useChatStateShallow((state) =>
-    state.gateway.roles.getRoles(state.userPopup?.user.roles ?? [])
+  const userPopup = useClackState(
+    ClackEvents.userPopup,
+    (state) => state.gui.userPopup
   );
+  const setUserPopup = getClackState((state) => state.gui.setUserPopup);
+
+  const userRoleIDs = userPopup?.user.roles ?? [];
+  const userRoles = useClackStateDynamic((state, events) => {
+    events.push(...userRoleIDs.map((id) => ClackEvents.role(id)));
+    return state.chat.roles.getRoles(userRoleIDs);
+  });
 
   if (userPopup == undefined) {
     return <></>;

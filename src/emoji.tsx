@@ -1,8 +1,5 @@
-import { useRef } from "react";
-
 import twemoji from "@twemoji/api";
 
-import { useChatState, useChatStateShallow } from "./state";
 import { TooltipWrapper } from "./components/Common";
 
 import { StringSearchScore } from "./util";
@@ -62,7 +59,7 @@ import emojiMapRaw from "./assets/emoji_map.json";
 export const emojiMap: EmojiMap = emojiMapRaw as EmojiMap;
 
 import emojiNamesRaw from "./assets/emoji_names.json";
-import { Snowflake } from "./models";
+import { Snowflake } from "./types";
 export const emojiNames: EmojiNames = emojiNamesRaw as EmojiNames;
 
 export const emojiIndex: EmojiIndex = (() => {

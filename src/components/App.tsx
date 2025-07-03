@@ -20,8 +20,6 @@ import CaptchaScreen from "./layers/CaptchaScreen";
 import { RiArrowDownSLine } from "react-icons/ri";
 import { ErrorBoundary } from "react-error-boundary";
 import { Fallback, FallbackLayer } from "./Error";
-import { useEffect, useRef } from "react";
-import { last } from "slate";
 
 function App() {
   return (

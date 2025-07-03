@@ -1,30 +1,30 @@
 import React, { useState, useEffect, useRef } from "react";
 
-import { useChatState, useChatStateShallow } from "../../state";
-import { GatewayAuthState } from "../../gateway";
-import { ErrorCode, ErrorCodeMessages } from "../../events";
+import { useClackState, getClackState, ClackEvents } from "../../state";
+import { ChatAuthState } from "../../state/chat";
+import { ErrorCode, ErrorCodeMessages } from "../../types";
 import { SHA256 } from "../../util";
 
 function Register() {
   const registerForm = useRef<HTMLFormElement>(null);
 
-  const register = useChatState((state) => {
-    return state.register;
+  const register = getClackState((state) => {
+    return state.chat.register;
   });
 
-  const switchAuthState = useChatState((state) => {
-    return state.switchAuthState;
+  const switchAuthState = getClackState((state) => {
+    return state.chat.switchAuthState;
   });
 
-  const state = useChatState((state) => {
-    return state.gateway.authState;
+  const state = useClackState(ClackEvents.auth, (state) => {
+    return state.chat.authState;
   });
 
-  const submit = state == GatewayAuthState.OkRegister;
-  const pending = state == GatewayAuthState.TryRegister || submit;
+  const submit = state == ChatAuthState.OkRegister;
+  const pending = state == ChatAuthState.TryRegister || submit;
 
-  const errorMessage = useChatState((state) => {
-    const code = state.gateway.authError?.code;
+  const errorMessage = useClackState(ClackEvents.auth, (state) => {
+    const code = state.chat.authError?.code;
     if (!code) {
       return "";
     } else {
@@ -32,12 +32,12 @@ function Register() {
     }
   });
 
-  const usesEmail = useChatState((state) => {
-    return state.gateway.settings!.usesEmail;
+  const usesEmail = useClackState(ClackEvents.settings, (state) => {
+    return state.chat.settings!.usesEmail;
   });
 
-  const usesInviteCodes = useChatState((state) => {
-    return state.gateway.settings!.usesInviteCodes;
+  const usesInviteCodes = useClackState(ClackEvents.settings, (state) => {
+    return state.chat.settings!.usesInviteCodes;
   });
 
   useEffect(() => {
@@ -154,7 +154,7 @@ function Register() {
         <div
           className="login-container-register link"
           onClick={() => {
-            switchAuthState(GatewayAuthState.Login);
+            switchAuthState(ChatAuthState.Login);
           }}
         >
           Back
@@ -167,23 +167,23 @@ function Register() {
 function Login() {
   const loginForm = useRef<HTMLFormElement>(null);
 
-  const login = useChatState((state) => {
-    return state.login;
+  const login = getClackState((state) => {
+    return state.chat.login;
   });
 
-  const switchAuthState = useChatState((state) => {
-    return state.switchAuthState;
+  const switchAuthState = getClackState((state) => {
+    return state.chat.switchAuthState;
   });
 
-  const state = useChatState((state) => {
-    return state.gateway.authState;
+  const state = useClackState(ClackEvents.auth, (state) => {
+    return state.chat.authState;
   });
 
-  const submit = state == GatewayAuthState.OkLogin;
-  const pending = state == GatewayAuthState.TryLogin || submit;
+  const submit = state == ChatAuthState.OkLogin;
+  const pending = state == ChatAuthState.TryLogin || submit;
 
-  const errorMessage = useChatState((state) => {
-    const code = state.gateway.authError?.code;
+  const errorMessage = useClackState(ClackEvents.auth, (state) => {
+    const code = state.chat.authError?.code;
     if (!code) {
       return "";
     } else {
@@ -191,12 +191,12 @@ function Login() {
     }
   });
 
-  const siteName = useChatState((state) => {
-    return state.gateway.settings!.siteName;
+  const siteName = useClackState(ClackEvents.settings, (state) => {
+    return state.chat.settings!.siteName;
   });
 
-  const loginMessage = useChatState((state) => {
-    return state.gateway.settings!.loginMessage;
+  const loginMessage = useClackState(ClackEvents.settings, (state) => {
+    return state.chat.settings!.loginMessage;
   });
 
   useEffect(() => {
@@ -279,7 +279,7 @@ function Login() {
         <div
           className="login-container-register link"
           onClick={() => {
-            switchAuthState(GatewayAuthState.Register);
+            switchAuthState(ChatAuthState.Register);
           }}
         >
           Register
@@ -290,18 +290,18 @@ function Login() {
 }
 
 export default function LoginScreen() {
-  const state = useChatStateShallow((state) => {
-    return state.gateway.authState;
+  const state = useClackState(ClackEvents.auth, (state) => {
+    return state.chat.authState;
   });
 
   const login =
-    state == GatewayAuthState.Login ||
-    state == GatewayAuthState.TryLogin ||
-    state == GatewayAuthState.OkLogin;
+    state == ChatAuthState.Login ||
+    state == ChatAuthState.TryLogin ||
+    state == ChatAuthState.OkLogin;
   const register =
-    state == GatewayAuthState.Register ||
-    state == GatewayAuthState.TryRegister ||
-    state == GatewayAuthState.OkRegister;
+    state == ChatAuthState.Register ||
+    state == ChatAuthState.TryRegister ||
+    state == ChatAuthState.OkRegister;
 
   const showing = login || register;
 

@@ -2,12 +2,17 @@ import { RiAddCircleFill, RiEmotionFill } from "react-icons/ri";
 import { IoClose } from "react-icons/io5";
 import { IoIosArrowDown } from "react-icons/io";
 
-import { useChatState, useChatStateShallow } from "../state";
+import {
+  useClackState,
+  useClackStateDynamic,
+  getClackState,
+  ClackEvents,
+} from "../state";
 
 import { useEffect, useRef, useState, useMemo } from "react";
 
 import { MessageEntry } from "./Message";
-import { EventType, MessageSendRequest } from "../events";
+import { EventType, MessageSendRequest } from "../types";
 
 import { Attachments } from "./Attachments";
 
@@ -24,10 +29,16 @@ import List from "./List";
 import { Descendant } from "slate";
 
 export function Chat() {
-  const messageView = useChatState((state) => state.gateway.currentMessages);
-  const anchor = useChatState((state) => state.gateway.getChatScroll() ?? "");
-  const setAnchor = useChatState((state) => state.setChatScroll);
-  const setTooltipPopup = useChatState((state) => state.setTooltipPopup);
+  const messageView = useClackState(
+    ClackEvents.current,
+    (state) => state.chat.currentMessages
+  );
+  const anchor = useClackState(
+    ClackEvents.current,
+    (state) => state.chat.getChatScroll() ?? ""
+  );
+  const setAnchor = getClackState((state) => state.chat.setChatScroll);
+  const setTooltipPopup = getClackState((state) => state.gui.setTooltipPopup);
 
   return (
     <List
@@ -58,13 +69,17 @@ export function Input() {
   const textboxRef = useRef<MarkdownTextboxRef>();
   const autocompleteRef = useRef<AutocompleteRef>();
 
-  const currentChannel = useChatState((state) => state.gateway.currentChannel);
-  const sendMessage = useChatState((state) => state.sendMessage);
-  const jumpToMessage = useChatState((state) => state.jumpToMessage);
+  const currentChannel = useClackState(
+    ClackEvents.current,
+    (state) => state.chat.currentChannel
+  );
+  const sendMessage = getClackState((state) => state.chat.sendMessage);
+  const jumpToMessage = getClackState((state) => state.chat.jumpToMessage);
 
-  const setAttachments = useChatState((state) => state.setAttachments);
-  const attaching = useChatState(
-    (state) => state.gateway.currentFiles.length > 0
+  const setAttachments = getClackState((state) => state.chat.setAttachments);
+  const attaching = useClackState(
+    ClackEvents.current,
+    (state) => state.chat.currentFiles.length > 0
   );
   function addFiles(files: File[]) {
     const newFiles = files.map((file) => {
@@ -83,28 +98,33 @@ export function Input() {
   }
 
   const [replyingMention, setReplyingMention] = useState<boolean>(false);
-  const replyingTo = useChatStateShallow((state) => {
-    var id = state.gateway.currentReplyingTo;
+  const replyingTo = useClackStateDynamic((state, events) => {
+    events.push(ClackEvents.current);
+    var id = state.chat.currentReplyingTo;
     if (id === undefined) return undefined;
 
-    const message = state.gateway.messages.get(id);
+    events.push(ClackEvents.message(id));
+    const message = state.chat.messages.get(id);
     if (message === undefined) return undefined;
 
-    const author = state.gateway.users.get(message.author);
+    const author = state.chat.users.get(message.author);
+    events.push(ClackEvents.user(message.author));
 
     return {
       message: message,
       author: author,
     };
   });
-  const setReplyingTo = useChatState((state) => state.setReplyingTo);
 
-  const showJumpToPresent = useChatState(
-    (state) => state.gateway.currentJumpToPresent
+  const setReplyingTo = getClackState((state) => state.chat.setReplyingTo);
+
+  const showJumpToPresent = useClackState(
+    ClackEvents.current,
+    (state) => state.chat.currentJumpToPresent
   );
 
-  const setEmojiPickerPopup = useChatState(
-    (state) => state.setEmojiPickerPopup
+  const setEmojiPickerPopup = getClackState(
+    (state) => state.gui.setEmojiPickerPopup
   );
 
   useEffect(() => {
@@ -122,17 +142,20 @@ export function Input() {
     />
   );
 
-  const currentChanneName = useChatStateShallow((state) => {
-    const c = state.gateway.currentChannel;
+  const currentChanneName = useClackStateDynamic((state, events) => {
+    events.push(ClackEvents.current);
+    const c = state.chat.currentChannel;
     if (c === undefined) return "unknown";
-    return state.gateway.channels.get(c)!.name;
+    events.push(ClackEvents.channel(c));
+    return state.chat.channels.get(c)!.name;
   });
 
-  const currentEditorState = useChatState(
-    (state) => state.gateway.currentEditor
+  const currentEditorState = useClackState(
+    ClackEvents.current,
+    (state) => state.chat.currentEditor
   );
-  const setEditorState = useChatState((state) => {
-    return state.setEditorState;
+  const setEditorState = getClackState((state) => {
+    return state.chat.setEditorState;
   });
 
   useEffect(() => {

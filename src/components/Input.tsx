@@ -1,7 +1,5 @@
-/*import Prism from 'prismjs'
-import 'prismjs/components/prism-markdown'*/
-
-import { useChatState, GetChatStateLookups, ChatStateLookups } from "../state";
+// @refresh reset
+import { useClackState, getClackState } from "../state";
 
 import React, {
   useCallback,
@@ -36,7 +34,6 @@ import {
 } from "slate";
 import { HistoryEditor, withHistory } from "slate-history";
 
-import { HiOutlineHashtag } from "react-icons/hi";
 import { isKeyHotkey } from "is-hotkey";
 
 import { EmojiInline, EmojiSymbolToName, EmojiSymbolByName } from "../emoji";
@@ -56,7 +53,7 @@ import {
 import twemoji from "@twemoji/api";
 
 import { FormatColor } from "../util";
-import { User, Role, Channel } from "../models";
+import { User, Role, Channel } from "../types";
 
 type LineElement = {
   type: "line";
@@ -404,11 +401,14 @@ interface CustomEditor extends BaseEditor {
 type FullEditor = BaseEditor & ReactEditor & HistoryEditor & CustomEditor;
 
 const withCustom = (
-  baseEditor: BaseEditor & ReactEditor & HistoryEditor,
-  lookups: ChatStateLookups
+  baseEditor: BaseEditor & ReactEditor & HistoryEditor
 ): FullEditor => {
   var editor: FullEditor = baseEditor as FullEditor;
   editor.decorations = [];
+
+  const lookupUser = getClackState((state) => state.chat.lookupUser);
+  const lookupRole = getClackState((state) => state.chat.lookupRole);
+  const lookupChannel = getClackState((state) => state.chat.lookupChannel);
 
   const { normalizeNode, isInline, isVoid } = editor;
 
@@ -496,7 +496,7 @@ const withCustom = (
             const type = match.groups[0];
             const name = match.groups[1];
             if (type === "@") {
-              const role = lookups.lookupRole(name, undefined);
+              const role = lookupRole(name, undefined);
               if (role !== undefined) {
                 return {
                   type: "roleMention",
@@ -504,7 +504,7 @@ const withCustom = (
                   children: [{ text: "" }],
                 };
               }
-              const user = lookups.lookupUser(name, undefined);
+              const user = lookupUser(name, undefined);
               if (user !== undefined) {
                 return {
                   type: "userMention",
@@ -514,7 +514,7 @@ const withCustom = (
               }
             }
             if (type === "#") {
-              const channel = lookups.lookupChannel(name, undefined);
+              const channel = lookupChannel(name, undefined);
               if (channel !== undefined) {
                 return {
                   type: "channelMention",
@@ -589,8 +589,6 @@ export const MarkdownTextbox = forwardRef(function MarkdownTextbox(
   },
   ref
 ) {
-  const lookups = GetChatStateLookups();
-
   const lastValue = useRef<string | undefined>(undefined);
   const cachedDecorations = useRef<SlateRange[] | undefined>(undefined);
 
@@ -615,13 +613,12 @@ export const MarkdownTextbox = forwardRef(function MarkdownTextbox(
       Transforms.insertText(editor, text);
     },
     setValue: (value: Descendant[]) => {
-      console.log("SET VALUE", value);
       setValue(value);
     },
   }));
 
   const editor = useMemo(() => {
-    return withCustom(withHistory(withReact(createEditor())), lookups);
+    return withCustom(withHistory(withReact(createEditor())));
   }, []);
 
   function getInitialValue(): Descendant[] {
@@ -645,7 +642,7 @@ export const MarkdownTextbox = forwardRef(function MarkdownTextbox(
     if (editor.children.length === 0) {
       editor.children = v;
       editor.normalize({ force: true });
-      sendOnValue();
+      //sendOnValue();
       return editor.children;
     }
     return v;
@@ -793,17 +790,6 @@ export const MarkdownTextbox = forwardRef(function MarkdownTextbox(
       }
     }
   };
-
-  /*useEffect(() => {
-    const newValue = getValue(currentEditor);
-    if (
-      JSON.stringify(editor.children) ===
-      JSON.stringify(getValue(currentEditor))
-    ) {
-      return;
-    }
-    setValue(newValue);
-  }, [currentChannel]);*/
 
   useEffect(() => {
     sendOnValue();

@@ -9,9 +9,9 @@ import {
 } from "react-icons/pi";
 import { MdVolumeUp, MdVolumeDown, MdVolumeOff } from "react-icons/md";
 
-import { useChatState } from "../state";
+import { useClackState, getClackState, ClackEvents } from "../state";
 
-import { Viewable } from "../models";
+import { Viewable } from "../types";
 
 function formatSeconds(seconds: number): string {
   const minutes = Math.floor(seconds / 60);
@@ -69,7 +69,7 @@ export function VideoDisplay({
 
   const seekWasPlaying = useRef<boolean>(false);
 
-  const setTooltipPopup = useChatState((state) => state.setTooltipPopup);
+  const setTooltipPopup = getClackState((state) => state.gui.setTooltipPopup);
 
   function doSeek(e: MouseEvent, force: boolean = false) {
     if (!videoRef.current || !seekBarRef.current) return;
@@ -508,7 +508,7 @@ export function VideoDisplay({
             src={src}
             preload="metadata"
             style={{
-              opacity: isLoaded ? 1 : 0,
+              opacity: isShowing ? 1 : 0,
               objectFit: isFullscreen ? "contain" : undefined,
             }}
             onPlay={() => {

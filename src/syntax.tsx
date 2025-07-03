@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from "react";
 import { Range, Point, Path, Descendant, last } from "slate";
 
 import { FindEmojis, EmojiInline, EmojiInlineExternal } from "./emoji";
-import { GetChatStateLookups, ChatStateLookups } from "./state";
+import { useClackState, getClackState, ClackEvents } from "./state";
 import { FormatColor } from "./util";
 
 import hljs from "highlight.js";
@@ -41,11 +41,9 @@ export type SyntaxRule = {
   ranges: (match: string, offset: number, groups: string[]) => SyntaxRange[];
   html: ({
     children,
-    lookups,
     params,
   }: {
     children: JSX.Element;
-    lookups: ChatStateLookups;
     params: { [key: string]: string };
   }) => JSX.Element;
 };
@@ -220,7 +218,7 @@ export const codeBlockRule: SyntaxRule = {
   ranges: (_, offset, groups) => {
     return codeBlockRanges(offset, groups, false);
   },
-  html: ({ children, lookups, params }) => {
+  html: ({ children, params }) => {
     const ref = useRef<HTMLElement>(null);
 
     useEffect(() => {
@@ -259,7 +257,7 @@ export const codeRule: SyntaxRule = {
   ranges: (_, offset, groups) => {
     return commonRanges(offset, groups, codeRule, false);
   },
-  html: ({ children, lookups, params }) => {
+  html: ({ children, params }) => {
     return <code className="inline">{children}</code>;
   },
 };
@@ -271,7 +269,7 @@ export const italicsRule: SyntaxRule = {
   ranges: (_, offset, groups) => {
     return commonRanges(offset, groups, italicsRule);
   },
-  html: ({ children, lookups, params }) => {
+  html: ({ children, params }) => {
     return <i>{children}</i>;
   },
 };
@@ -293,7 +291,7 @@ export const boldRule: SyntaxRule = {
   ranges: (_, offset, groups) => {
     return commonRanges(offset, groups, boldRule);
   },
-  html: ({ children, lookups, params }) => {
+  html: ({ children, params }) => {
     return <b>{children}</b>;
   },
 };
@@ -305,7 +303,7 @@ export const underlineRule: SyntaxRule = {
   ranges: (_, offset, groups) => {
     return commonRanges(offset, groups, underlineRule);
   },
-  html: ({ children, lookups, params }) => {
+  html: ({ children, params }) => {
     return <u>{children}</u>;
   },
 };
@@ -317,7 +315,7 @@ export const strikethroughRule: SyntaxRule = {
   ranges: (_, offset, groups) => {
     return commonRanges(offset, groups, strikethroughRule);
   },
-  html: ({ children, lookups, params }) => {
+  html: ({ children, params }) => {
     return <s>{children}</s>;
   },
 };
@@ -343,7 +341,7 @@ export const escapeRule: SyntaxRule = {
     ];
     return ranges;
   },
-  html: ({ children, lookups, params }) => {
+  html: ({ children, params }) => {
     return <span>{children}</span>;
   },
 };
@@ -363,31 +361,33 @@ export const userMentionRule: SyntaxRule = {
     ];
     return ranges;
   },
-  html: ({ children, lookups, params }) => {
+  html: ({ children, params }) => {
     const text = children.props.children[0];
-    const id = userMentionRule.regex.exec(text)?.[1];
-    if (id !== undefined) {
-      const user = lookups.lookupUser(undefined, id);
-      console.log("USER", id, user);
-      if (user !== undefined) {
-        return (
-          <span
-            className="inline-mention inline-button"
-            onClick={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect();
-              lookups.setUserPopup({
-                id: user.id,
-                user: user,
-                position: {
-                  x: rect.right + 8,
-                  y: rect.top,
-                },
-                direction: "right",
-              });
-            }}
-          >{`@${user.nickname ?? user.username}`}</span>
-        );
-      }
+    const id = userMentionRule.regex.exec(text)?.[1] ?? "";
+
+    const user = useClackState(ClackEvents.user(id), (state) =>
+      state.chat.users.get(id)
+    );
+    const setUserPopup = getClackState((state) => state.gui.setUserPopup);
+
+    if (user !== undefined) {
+      return (
+        <span
+          className="inline-mention inline-button"
+          onClick={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            setUserPopup({
+              id: user.id,
+              user: user,
+              position: {
+                x: rect.right + 8,
+                y: rect.top,
+              },
+              direction: "right",
+            });
+          }}
+        >{`@${user.nickname ?? user.username}`}</span>
+      );
     }
     return (
       <span className="inline-mention inline-button">{"@Unknown User"}</span>
@@ -410,24 +410,25 @@ export const roleMentionRule: SyntaxRule = {
     ];
     return ranges;
   },
-  html: ({ children, lookups, params }) => {
+  html: ({ children, params }) => {
     const text = children.props.children[0];
-    const id = roleMentionRule.regex.exec(text)?.[1];
-    if (id !== undefined) {
-      const role = lookups.lookupRole(undefined, id);
-      if (role !== undefined) {
-        const color = FormatColor(role.color);
-        const backgroundColor = FormatColor(role.color, 0.15);
-        return (
-          <span
-            className="inline-mention inline-button"
-            style={{
-              backgroundColor: backgroundColor,
-              color: color,
-            }}
-          >{`@${role.name}`}</span>
-        );
-      }
+    const id = roleMentionRule.regex.exec(text)?.[1] ?? "";
+
+    const role = useClackState(ClackEvents.role(id), (state) =>
+      state.chat.roles.get(id)
+    );
+    if (role !== undefined) {
+      const color = FormatColor(role.color);
+      const backgroundColor = FormatColor(role.color, 0.15);
+      return (
+        <span
+          className="inline-mention inline-button"
+          style={{
+            backgroundColor: backgroundColor,
+            color: color,
+          }}
+        >{`@${role.name}`}</span>
+      );
     }
     return (
       <span className="inline-mention inline-button">{"@Unknown Role"}</span>
@@ -450,15 +451,15 @@ export const channelMentionRule: SyntaxRule = {
     ];
     return ranges;
   },
-  html: ({ children, lookups, params }) => {
+  html: ({ children, params }) => {
     const text = children.props.children[0];
-    const id = channelMentionRule.regex.exec(text)?.[1];
+    const id = channelMentionRule.regex.exec(text)?.[1] ?? "";
+    const channel = useClackState(ClackEvents.channel(id), (state) =>
+      state.chat.channels.get(id)
+    );
     var name = "Unknown Channel";
-    if (id !== undefined) {
-      const channel = lookups.lookupChannel(undefined, id);
-      if (channel !== undefined) {
-        name = channel.name;
-      }
+    if (channel !== undefined) {
+      name = channel.name;
     }
     return (
       <span className="inline-mention inline-button">
@@ -484,7 +485,7 @@ export const urlRule: SyntaxRule = {
     ];
     return ranges;
   },
-  html: ({ children, lookups, params }) => {
+  html: ({ children, params }) => {
     const text = children.props.children[0];
     return (
       <a href={text} target="_blank" rel="noopener noreferrer">
@@ -720,7 +721,6 @@ export function GetLineDecoration(parts: SlatePart[]): SlateRange[] {
 }
 
 export function GetGlobalDecoration(parts: SlatePart[]): SlateRange[] {
-  console.log("GetGlobalDecoration");
   return GetDecorations(parts, globalRuleOrdering);
 }
 
@@ -766,8 +766,6 @@ export function SyntaxContent({
   text: string;
   inline?: boolean;
 }) {
-  const lookups = GetChatStateLookups();
-
   var ranges: SyntaxRange[] = ParseRanges(text, [], fullRuleOrdering);
 
   var elements = [];
@@ -807,11 +805,7 @@ export function SyntaxContent({
           continue;
         }
         element = (
-          <rule.html
-            lookups={lookups}
-            params={{ language: lang }}
-            key={`range-${i++}`}
-          >
+          <rule.html params={{ language: lang }} key={`range-${i++}`}>
             {element}
           </rule.html>
         );

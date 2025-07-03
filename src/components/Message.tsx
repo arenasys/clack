@@ -1,7 +1,8 @@
 import {
-  GetChatStateLookups,
-  useChatState,
-  useChatStateShallow,
+  useClackState,
+  getClackState,
+  ClackEvents,
+  useClackStateDynamic,
 } from "../state";
 
 import { useEffect, useRef, useState, useMemo } from "react";
@@ -15,7 +16,7 @@ import {
   Embed,
   EmbedType,
   Permissions,
-} from "../models";
+} from "../types";
 
 import { EmojiInline } from "../emoji";
 
@@ -62,24 +63,25 @@ export function Message({
   id: string;
   standalone?: boolean;
 }) {
-  const message = useChatStateShallow((state) => {
-    const m = state.gateway.messages.get(id);
+  const message = useClackStateDynamic((state, events) => {
+    events.push(ClackEvents.current);
+    events.push(ClackEvents.message(id));
+
+    const m = state.chat.messages.get(id);
     if (!m) return undefined;
 
-    const a = state.gateway.users.get(m.author);
-    const p = state.gateway.pendingMessages.has(id);
-    const c = state.gateway.currentMessagesIsCombined.get(id)!;
-    const r = state.gateway.currentReplyingTo;
-    const j = state.gateway.currentJumpedTo;
+    events.push(ClackEvents.user(m.author));
+
+    const a = state.chat.users.get(m.author);
+    const p = state.chat.pendingMessages.has(id);
+    const c = state.chat.currentMessagesIsCombined.get(id)!;
+    const r = state.chat.currentReplyingTo == id;
+    const j = state.chat.currentJumpedTo == id;
 
     var u = false;
     if (p) {
-      const pending = state.gateway.pendingMessages.get(id);
+      const pending = state.chat.pendingMessages.get(id);
       u = (pending?.attachments?.length ?? 0) > 0;
-    }
-
-    if (m.id == "1940300891819085824") {
-      console.log(m, a);
     }
 
     return {
@@ -90,12 +92,12 @@ export function Message({
       pending: p,
       uploading: u,
       combined: c,
-      replying: r == id,
-      jumped: j == id,
+      replying: r,
+      jumped: j,
       reference: m.reference,
-      you: a?.id == state.gateway.currentUser,
-      permissions: state.gateway.getPermissions(
-        state.gateway.currentUser!,
+      you: a?.id == state.chat.currentUser,
+      permissions: state.chat.getPermissions(
+        state.chat.currentUser!,
         m.channel
       ),
     };
@@ -107,8 +109,8 @@ export function Message({
 
   const [isEditing, setIsEditing] = useState(false);
   const editedValue = useRef<string | undefined>();
-  const updateMessage = useChatState((state) => state.updateMessage);
-  const addReaction = useChatState((state) => state.addReaction);
+  const updateMessage = getClackState((state) => state.chat.updateMessage);
+  const addReaction = getClackState((state) => state.chat.addReaction);
   const [isFlashing, setIsFlashing] = useState(false);
   const flashingTimeout = useRef<number | null>(null);
   const [isPickingEmoji, setIsPickingEmoji] = useState(false);
@@ -117,21 +119,22 @@ export function Message({
     editedValue.current = undefined;
   }, [message?.editedTimestamp]);
 
-  const setViewerModal = useChatState((state) => state.setViewerModal);
-  const setUserPopup = useChatState((state) => state.setUserPopup);
-  const setContextMenuPopup = useChatState(
-    (state) => state.setContextMenuPopup
+  const setViewerModal = getClackState((state) => state.gui.setViewerModal);
+  const setUserPopup = getClackState((state) => state.gui.setUserPopup);
+  const setContextMenuPopup = getClackState(
+    (state) => state.gui.setContextMenuPopup
   );
-  const setEmojiPickerPopup = useChatState(
-    (state) => state.setEmojiPickerPopup
+  const setEmojiPickerPopup = getClackState(
+    (state) => state.gui.setEmojiPickerPopup
   );
 
-  const setReplyingTo = useChatState((state) => state.setReplyingTo);
-  const jumpToMessage = useChatState((state) => state.jumpToMessage);
+  const setReplyingTo = getClackState((state) => state.chat.setReplyingTo);
+  const jumpToMessage = getClackState((state) => state.chat.jumpToMessage);
 
-  const contextMenu = useChatState((state) => {
-    return state.contextMenuPopup;
-  });
+  const contextMenu = useClackState(
+    ClackEvents.contextMenu(id),
+    (state) => state.gui.contextMenuPopup
+  );
 
   const hasContextMenu = contextMenu?.message == id;
   const hasReference = message?.reference !== undefined;
@@ -622,10 +625,10 @@ function MessageEditor({
 }
 
 function MessageUpload({ id }: { id: string }) {
-  const cancel = useChatState((state) => state.cancelMessage);
+  const cancel = getClackState((state) => state.chat.cancelMessage);
 
-  const pending = useChatStateShallow((state) => {
-    return state.gateway.pendingMessages.get(id);
+  const pending = useClackState(ClackEvents.message(id), (state) => {
+    return state.chat.pendingMessages.get(id);
   });
 
   // Polling for progress
@@ -751,7 +754,7 @@ function MessageVideoEmbed({ embed }: { embed: Embed }) {
 }
 
 function MessageRichEmbed({ embed }: { embed: Embed }) {
-  const setViewerModal = useChatState((state) => state.setViewerModal);
+  const setViewerModal = getClackState((state) => state.gui.setViewerModal);
 
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -1060,11 +1063,11 @@ function MessageEditedTimestamp({ timestamp }: { timestamp: number }) {
 }
 
 function MessageReference({ id }: { id: string }) {
-  const message = useChatStateShallow((state) => {
-    const m = state.gateway.messages.get(id);
+  const message = useClackState(ClackEvents.message(id), (state) => {
+    const m = state.chat.messages.get(id);
     if (!m) return undefined;
 
-    const a = state.gateway.users.get(m.author);
+    const a = state.chat.users.get(m.author);
     return {
       ...m,
       user: a,
@@ -1072,8 +1075,8 @@ function MessageReference({ id }: { id: string }) {
       color: a?.color,
     };
   });
-  const setUserPopup = useChatState((state) => state.setUserPopup);
-  const jumpToMessage = useChatState((state) => state.jumpToMessage);
+  const setUserPopup = getClackState((state) => state.gui.setUserPopup);
+  const jumpToMessage = getClackState((state) => state.chat.jumpToMessage);
 
   return (
     <div
@@ -1136,8 +1139,8 @@ function MessageReference({ id }: { id: string }) {
 }
 
 function MessageReactions({ id }: { id: string }) {
-  const reactions = useChatStateShallow((state) => {
-    return state.gateway.messages.get(id)?.reactions ?? [];
+  const reactions = useClackState(ClackEvents.message(id), (state) => {
+    return state.chat.messages.get(id)?.reactions ?? [];
   });
 
   return (

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useMemo, useState } from "react";
 
-import { useChatState } from "../../../state";
+import { useClackState, getClackState, ClackEvents } from "../../../state";
 
 import { Message } from "../../Message";
 
@@ -9,10 +9,14 @@ import { ClickWrapper, Modal, ModalHandle } from "../../Common";
 export default function DeleteMessageModal() {
   const modalRef = useRef<ModalHandle>(null);
 
-  const deleteModal = useChatState((state) => state.messageDeleteModal);
-  const setDeleteModal = useChatState((state) => state.setMessageDeleteModal);
-
-  const deleteMessage = useChatState((state) => state.deleteMessage);
+  const deleteModal = useClackState(
+    ClackEvents.deleteMessageModal,
+    (state) => state.gui.messageDeleteModal
+  );
+  const setDeleteModal = getClackState(
+    (state) => state.gui.setMessageDeleteModal
+  );
+  const deleteMessage = getClackState((state) => state.chat.deleteMessage);
 
   const messageContent = useMemo(() => {
     if (deleteModal == undefined) return <></>;

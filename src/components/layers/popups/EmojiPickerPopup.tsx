@@ -1,8 +1,14 @@
+// @refresh reset
 import { useEffect, useState, useRef, useMemo, memo } from "react";
 
 import { VList, VListHandle } from "virtua";
 
-import { useChatState, useChatStateShallow } from "../../../state";
+import { useClackState, getClackState, ClackEvents } from "../../../state.tsx";
+import {
+  EventBus,
+  useEventBus,
+  useEventBusDynamic,
+} from "../../../state/events.tsx";
 
 import { BiSearch } from "react-icons/bi";
 
@@ -73,36 +79,88 @@ function getEmoji(emoji: EmojiEntry, selectedTone: number): EmojiEntry {
   return shown;
 }
 
+const eventBus = new EventBus();
+
+interface MultiToneTarget {
+  rect: DOMRect;
+  emoji: EmojiEntry;
+}
+var state: {
+  selectedTone: number;
+  selectedEmoji?: EmojiEntry;
+  multiToneTarget?: MultiToneTarget;
+} = {
+  selectedTone: 0,
+  selectedEmoji: undefined,
+  multiToneTarget: undefined,
+};
+
+(globalThis as any).state = state;
+(globalThis as any).eventBus = eventBus;
+
+function getEmojiSelection(emoji: EmojiEntry): string {
+  if (state.multiToneTarget?.emoji.symbol === emoji.symbol) {
+    return "disabled";
+  }
+  if (
+    state.selectedEmoji?.symbol === emoji.symbol ||
+    emoji?.diversityChildren?.some(
+      (child) => child.symbol === state.selectedEmoji?.symbol
+    )
+  ) {
+    return "selected";
+  }
+  return "";
+}
+
 function EmojiPickerEntry({
   emoji,
-  selectedTone,
-  isSelected,
   onSelect,
   onClick,
-  onContextMenu,
+  onMultiTone,
 }: {
   emoji: EmojiEntry;
-  selectedTone: number;
-  isSelected: (emoji: EmojiEntry) => string;
   onSelect: (emoji: EmojiEntry) => void;
   onClick: (emoji: EmojiEntry) => void;
-  onContextMenu: (emoji: EmojiEntry, rect: DOMRect) => void;
+  onMultiTone: (target: MultiToneTarget | undefined) => void;
 }) {
   const ref = useRef<HTMLLIElement>(null);
 
-  const shown = getEmoji(emoji, selectedTone);
+  useEventBusDynamic(eventBus, (keys) => {
+    keys.push(emoji.symbol);
+    if (emoji.diversityChildren) {
+      for (const child of emoji.diversityChildren) {
+        keys.push(child.symbol);
+      }
+      keys.push("tone");
+    }
+  });
+
+  const selectedClass = getEmojiSelection(emoji);
+
+  const shown = getEmoji(emoji, state.selectedTone);
 
   return (
     <li ref={ref}>
       <button
-        className={`emoji-picker-entry ${isSelected(shown)}`}
+        className={`emoji-picker-entry ${selectedClass}`}
         onMouseMove={() => onSelect(shown)}
         onClick={() => {
           onClick(shown);
         }}
         onContextMenu={(e) => {
           e.preventDefault();
-          onContextMenu(emoji, ref.current!.getBoundingClientRect());
+          var target: MultiToneTarget | undefined = {
+            emoji: emoji,
+            rect: ref.current!.getBoundingClientRect(),
+          };
+          const hasMultiDiversity =
+            emoji.hasMultiDiversity && state.selectedTone != 0;
+          if (!hasMultiDiversity || state.multiToneTarget !== undefined) {
+            target = undefined;
+          }
+
+          onMultiTone(target);
         }}
       >
         <EmojiPNG symbol={shown.symbol} />
@@ -111,68 +169,58 @@ function EmojiPickerEntry({
   );
 }
 
-const EmojiPickerRow = memo(
-  function EmojiPickerRowInternal({
-    rowIndex,
-    rowItems,
-    selectedTone,
-    isSelected,
-    onClick,
-    onSelect,
-    onContextMenu,
-  }: {
-    rowIndex: number;
-    rowItems: EmojiEntry[];
-    selectedTone: number;
-    isSelected: (e: EmojiEntry) => string;
-    onClick: (e: EmojiEntry) => void;
-    onSelect: (e: EmojiEntry) => void;
-    onContextMenu: (e: EmojiEntry, r: DOMRect) => void;
-  }) {
-    return (
-      <ul className={`emoji-picker-row ${rowIndex === 0 ? "first" : ""}`}>
-        {rowItems.map((emoji, _) => (
-          <EmojiPickerEntry
-            key={emoji.symbol}
-            emoji={emoji}
-            selectedTone={selectedTone}
-            isSelected={isSelected}
-            onClick={onClick}
-            onSelect={onSelect}
-            onContextMenu={onContextMenu}
-          />
-        ))}
-      </ul>
-    );
-  },
-  (prev, next) => {
-    if (prev.selectedTone !== next.selectedTone) {
-      return false;
-    }
-    const prevWas = prev.rowItems.some((e) => prev.isSelected(e) !== "");
-    const nextIs = next.rowItems.some((e) => next.isSelected(e) !== "");
-    return !(prevWas || nextIs);
-  }
-);
+function EmojiPickerRowInternal({
+  rowIndex,
+  rowItems,
+  onClick,
+  onSelect,
+  onMultiTone,
+}: {
+  rowIndex: number;
+  rowItems: EmojiEntry[];
+  onClick: (e: EmojiEntry) => void;
+  onSelect: (e: EmojiEntry) => void;
+  onMultiTone: (target: MultiToneTarget | undefined) => void;
+}) {
+  return (
+    <ul className={`emoji-picker-row ${rowIndex === 0 ? "first" : ""}`}>
+      {rowItems.map((emoji, _) => (
+        <EmojiPickerEntry
+          key={emoji.symbol}
+          emoji={emoji}
+          onClick={onClick}
+          onSelect={onSelect}
+          onMultiTone={onMultiTone}
+        />
+      ))}
+    </ul>
+  );
+}
+
+const EmojiPickerRow = memo(EmojiPickerRowInternal, (prevProps, nextProps) => {
+  return (
+    prevProps.rowIndex === nextProps.rowIndex &&
+    prevProps.rowItems.length === nextProps.rowItems.length &&
+    prevProps.rowItems.every(
+      (item, index) => item.symbol === nextProps.rowItems[index].symbol
+    )
+  );
+});
 
 function EmojiPickerBody({
   data,
   listRef,
-  selectedTone,
-  isSelected,
   onScroll,
   onClick,
   onSelect,
-  onContextMenu,
+  onMultiTone,
 }: {
   data: React.MutableRefObject<(string | EmojiEntry[])[]>;
   listRef: React.Ref<VListHandle>;
-  selectedTone: number;
-  isSelected: (emoji: EmojiEntry) => string;
   onScroll: () => void;
   onClick: (emoji: EmojiEntry) => void;
   onSelect: (emoji: EmojiEntry) => void;
-  onContextMenu: (emoji: EmojiEntry, rect: DOMRect) => void;
+  onMultiTone: (target: MultiToneTarget | undefined) => void;
 }) {
   return (
     <VList
@@ -197,11 +245,9 @@ function EmojiPickerBody({
             <EmojiPickerRow
               rowIndex={index}
               rowItems={row}
-              selectedTone={selectedTone}
-              isSelected={isSelected}
               onClick={onClick}
               onSelect={onSelect}
-              onContextMenu={onContextMenu}
+              onMultiTone={onMultiTone}
             />
           );
         }
@@ -232,11 +278,7 @@ export default function EmojiPickerPopup() {
 
   const multiToneListRef = useRef<HTMLDivElement>(null);
   const [multiToneTarget, setMultiToneTarget] = useState<
-    | {
-        rect: DOMRect;
-        emoji: EmojiEntry;
-      }
-    | undefined
+    MultiToneTarget | undefined
   >(undefined);
   const showingMultiToneList = multiToneTarget !== undefined;
   const wasListJustClosed = useRef<boolean>(undefined);
@@ -248,9 +290,12 @@ export default function EmojiPickerPopup() {
   const searchRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState<string>("");
 
-  const emojiPickerPopup = useChatState((state) => state.emojiPickerPopup);
-  const setEmojiPickerPopup = useChatState(
-    (state) => state.setEmojiPickerPopup
+  const emojiPickerPopup = useClackState(
+    ClackEvents.emojiPickerPopup,
+    (state) => state.gui.emojiPickerPopup
+  );
+  const setEmojiPickerPopup = getClackState(
+    (state) => state.gui.setEmojiPickerPopup
   );
 
   function pickEmoji(emoji: EmojiEntry) {
@@ -261,13 +306,58 @@ export default function EmojiPickerPopup() {
     setEmojiPickerPopup(undefined);
   }
 
+  state = {
+    selectedTone: selectedTone,
+    selectedEmoji: selectedEmoji,
+    multiToneTarget: multiToneTarget,
+  };
+
+  function doSetSelectedTone(tone: number) {
+    state.selectedTone = tone;
+    setSelectedTone(tone);
+    eventBus.emit("tone");
+  }
+
+  function doSetSelectedEmoji(emoji: EmojiEntry | undefined) {
+    if (state.selectedEmoji === emoji) return;
+    const oldSelectedEmoji = state.selectedEmoji;
+    state.selectedEmoji = emoji;
+    if (oldSelectedEmoji !== undefined) {
+      eventBus.emit(oldSelectedEmoji.symbol);
+    }
+    setSelectedEmoji(emoji);
+    if (emoji !== undefined) {
+      eventBus.emit(emoji.symbol);
+    }
+  }
+
+  function doSetMultiToneTarget(
+    target:
+      | {
+          rect: DOMRect;
+          emoji: EmojiEntry;
+        }
+      | undefined
+  ) {
+    const oldMultiToneTarget = state.multiToneTarget;
+    state.multiToneTarget = target;
+    if (oldMultiToneTarget !== undefined) {
+      eventBus.emit(oldMultiToneTarget.emoji.symbol);
+    }
+    setMultiToneTarget(target);
+    if (target !== undefined) {
+      eventBus.emit(target.emoji.symbol);
+    }
+  }
+
   function clear() {
+    eventBus.clear();
     setSearch("");
     setSelectedCategory("people");
-    setSelectedEmoji(undefined);
-    setSelectedTone(0);
-    setMultiToneTarget(undefined);
     setShowingToneList(false);
+    doSetSelectedEmoji(undefined);
+    doSetSelectedTone(0);
+    doSetMultiToneTarget(undefined);
   }
 
   function syncCurrentCategory() {
@@ -317,7 +407,7 @@ export default function EmojiPickerPopup() {
       );
       var index = tones.findIndex((e) => e.symbol === selectedEmoji?.symbol);
       index = Math.max(0, Math.min(4, index + hDelta));
-      setSelectedEmoji(tones[index]);
+      doSetSelectedEmoji(tones[index]);
       return;
     }
 
@@ -364,7 +454,7 @@ export default function EmojiPickerPopup() {
 
     const row = getRow(vIndex);
     if (row[hIndex] !== undefined) {
-      setSelectedEmoji(getEmoji(row[hIndex], selectedTone));
+      doSetSelectedEmoji(getEmoji(row[hIndex], selectedTone));
       if (listRef.current) {
         const first =
           vIndex === 0 ||
@@ -381,7 +471,7 @@ export default function EmojiPickerPopup() {
 
   function onKeyDown(e: KeyboardEvent) {
     if (e.ctrlKey && e.key === "ArrowDown") {
-      setSelectedTone((selectedTone + 1) % toneSymbols.length);
+      doSetSelectedTone((selectedTone + 1) % toneSymbols.length);
     }
 
     if (e.key === "ArrowLeft") {
@@ -404,7 +494,7 @@ export default function EmojiPickerPopup() {
       if (showingToneList) {
         setShowingToneList(false);
       } else if (showingMultiToneList) {
-        setMultiToneTarget(undefined);
+        doSetMultiToneTarget(undefined);
       } else {
         setEmojiPickerPopup(undefined);
       }
@@ -423,10 +513,6 @@ export default function EmojiPickerPopup() {
     };
   }, [emojiPickerPopup, selectedEmoji]);
 
-  useEffect(() => {
-    clear();
-  }, [emojiPickerPopup]);
-
   function onMouseDown(e: MouseEvent) {
     if (showingToneList && toneListRef.current) {
       var rect = toneListRef.current.getBoundingClientRect();
@@ -440,7 +526,7 @@ export default function EmojiPickerPopup() {
       if (!isInsideRect(e.clientX, e.clientY, rect)) {
         if (e.buttons !== 2) {
           wasListJustClosed.current = true;
-          setMultiToneTarget(undefined);
+          doSetMultiToneTarget(undefined);
         }
       }
     }
@@ -460,6 +546,7 @@ export default function EmojiPickerPopup() {
     listData.current = [];
 
     if (emojiPickerPopup === undefined) {
+      clear();
       return <></>;
     }
 
@@ -494,7 +581,7 @@ export default function EmojiPickerPopup() {
         if (typeof item !== "string") {
           const rowItem = item as EmojiEntry[];
           if (rowItem.length > 0) {
-            setSelectedEmoji(rowItem[0]);
+            doSetSelectedEmoji(rowItem[0]);
             break;
           }
         }
@@ -512,29 +599,13 @@ export default function EmojiPickerPopup() {
       <EmojiPickerBody
         data={listData}
         listRef={listRef}
-        selectedTone={selectedTone}
         onScroll={() => {
           syncCurrentCategory();
-          setMultiToneTarget(undefined);
-        }}
-        isSelected={(emoji) => {
-          if (showingMultiToneList) {
-            if (
-              multiToneTarget?.emoji.diversityChildren?.some(
-                (child) => child.symbol === emoji.symbol
-              )
-            ) {
-              return "disabled";
-            }
-          }
-          if (selectedEmoji?.symbol === emoji.symbol) {
-            return "selected";
-          }
-          return "";
+          doSetMultiToneTarget(undefined);
         }}
         onSelect={(emoji) => {
           if (selectedEmoji?.symbol !== emoji.symbol) {
-            setSelectedEmoji(emoji);
+            doSetSelectedEmoji(emoji);
           }
         }}
         onClick={(emoji) => {
@@ -544,35 +615,12 @@ export default function EmojiPickerPopup() {
           }
           pickEmoji(emoji);
         }}
-        onContextMenu={(emoji, rect) => {
-          const hasMultiDiversity =
-            emoji.hasMultiDiversity && selectedTone != 0;
-          if (
-            showingMultiToneList &&
-            (multiToneTarget.emoji?.symbol === emoji.symbol ||
-              !hasMultiDiversity)
-          ) {
-            setMultiToneTarget(undefined);
-          } else {
-            if (hasMultiDiversity) {
-              setMultiToneTarget({
-                rect: rect,
-                emoji: emoji,
-              });
-            }
-          }
+        onMultiTone={(target) => {
+          doSetMultiToneTarget(target);
         }}
       />
     );
-  }, [
-    emojiPickerPopup,
-    search,
-    selectedTone,
-    selectedEmoji,
-    firstLoad,
-    showingMultiToneList,
-    multiToneTarget,
-  ]);
+  }, [emojiPickerPopup, search, firstLoad, showingMultiToneList]);
 
   const categoryContent: any = useMemo(() => {
     return (
@@ -640,7 +688,7 @@ export default function EmojiPickerPopup() {
                   const query = e.target.value;
                   setSearch(query);
                   setSelectedCategory(query == "" ? "people" : "");
-                  setSelectedEmoji(undefined);
+                  doSetSelectedEmoji(undefined);
                 }}
               />
               <BiSearch />
@@ -658,7 +706,7 @@ export default function EmojiPickerPopup() {
                   <IconButton
                     key={index}
                     onClick={() => {
-                      setSelectedTone(index);
+                      doSetSelectedTone(index);
                       setShowingToneList(false);
                     }}
                   >
@@ -714,7 +762,7 @@ export default function EmojiPickerPopup() {
                         ? "selected"
                         : ""
                     }`}
-                    onMouseMove={() => setSelectedEmoji(childEmoji)}
+                    onMouseMove={() => doSetSelectedEmoji(childEmoji)}
                     onClick={() => {
                       pickEmoji(childEmoji);
                     }}

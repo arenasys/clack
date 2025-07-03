@@ -1,6 +1,9 @@
-import { useChatState, useChatStateShallow } from "../../../state";
+import { useClackState, getClackState, ClackEvents } from "../../../state";
 export default function TooltipPopup() {
-  const tooltipPopup = useChatState((state) => state.tooltipPopup);
+  const tooltipPopup = useClackState(
+    ClackEvents.tooltipPopup,
+    (state) => state.gui.tooltipPopup
+  );
 
   if (tooltipPopup == undefined) {
     return <></>;

@@ -1,16 +1,19 @@
 import { useEffect, useRef, useMemo, useState } from "react";
 
-import { useChatState } from "../../../state";
+import { useClackState, getClackState, ClackEvents } from "../../../state";
 
 import { Modal, ModalHandle } from "../../Common";
 
-import { ErrorCodeMessages, EventTypeDescriptions } from "../../../events";
+import { ErrorCodeMessages, EventTypeDescriptions } from "../../../types";
 
 export default function ErrorModal() {
   const modalRef = useRef<ModalHandle>(null);
 
-  const errorModal = useChatState((state) => state.errorModal);
-  const setErrorModal = useChatState((state) => state.setErrorModal);
+  const errorModal = useClackState(
+    ClackEvents.errorModal,
+    (state) => state.gui.errorModal
+  );
+  const setErrorModal = getClackState((state) => state.gui.setErrorModal);
 
   if (errorModal == undefined) {
     return <></>;

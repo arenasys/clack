@@ -1,9 +1,9 @@
 import { useEffect, useRef, useMemo, useState } from "react";
-import { Viewable, AttachmentType } from "../../../models";
+import { Viewable, AttachmentType } from "../../../types";
 
 import { PiArrowLeftBold, PiArrowRightBold } from "react-icons/pi";
 
-import { useChatState } from "../../../state";
+import { useClackState, getClackState, ClackEvents } from "../../../state";
 import { VideoDisplay, ImageDisplay } from "../../Media";
 import { Modal, ModalHandle } from "../../Common";
 
@@ -11,8 +11,11 @@ const mod = (n: number, m: number) => ((n % m) + m) % m;
 
 export default function ViewerModal() {
   const modalRef = useRef<ModalHandle>(null);
-  const viewerModal = useChatState((state) => state.viewerModal);
-  const setViewerModal = useChatState((state) => state.setViewerModal);
+  const viewerModal = useClackState(
+    ClackEvents.viewerModal,
+    (state) => state.gui.viewerModal
+  );
+  const setViewerModal = getClackState((state) => state.gui.setViewerModal);
 
   const [isClosing, setIsClosing] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
