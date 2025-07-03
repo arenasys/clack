@@ -194,33 +194,37 @@ export function ChooseFiles(): Promise<File[]> {
   });
 }
 
-export function GetFileType(file: File): AttachmentType {
-  if (file.type.startsWith("image/")) {
+export function GetFileType(mimetype: string): AttachmentType {
+  if (mimetype.startsWith("image/")) {
     return AttachmentType.Image;
-  } else if (file.type.startsWith("video/")) {
+  } else if (mimetype.startsWith("video/")) {
     return AttachmentType.Video;
-  } else if (file.type.startsWith("audio/")) {
+  } else if (mimetype.startsWith("audio/")) {
     return AttachmentType.Audio;
-  } else if (file.type.startsWith("text/")) {
+  } else if (mimetype.startsWith("text/")) {
     return AttachmentType.Text;
   } else {
     return AttachmentType.File;
   }
 }
 
-export function GetFileIcon(name: string, type: AttachmentType) {
-  if (type === AttachmentType.Image) {
+export function GetFileIcon(name: string, mimetype: string) {
+  if (mimetype.startsWith("image/")) {
     return <FaFileImage />;
-  } else if (type === AttachmentType.Video) {
+  } else if (mimetype.startsWith("video/")) {
     return <FaFileVideo />;
-  } else if (type === AttachmentType.Audio) {
+  } else if (mimetype.startsWith("audio/")) {
     return <FaFileAudio />;
-  } else if (name.endsWith(".zip") || name.endsWith(".gz")) {
+  } else if (mimetype.startsWith("text/")) {
+    if (name.endsWith(".txt") || name.endsWith(".md")) {
+      return <FaFileAlt />;
+    } else {
+      return <FaFileCode />;
+    }
+  } else if (mimetype.endsWith("zip")) {
     return <FaFileArchive />;
-  } else if (name.endsWith(".pdf")) {
+  } else if (mimetype.endsWith("pdf")) {
     return <FaFilePdf />;
-  } else if (name.endsWith(".txt")) {
-    return <FaFileAlt />;
   } else {
     return <FaFile />;
   }

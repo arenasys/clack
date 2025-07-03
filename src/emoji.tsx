@@ -7,6 +7,8 @@ import { TooltipWrapper } from "./components/Common";
 
 import { StringSearchScore } from "./util";
 
+import CRC32 from "crc-32";
+
 export interface EmojiEntry {
   names: string[];
   symbol: string;
@@ -44,6 +46,7 @@ export interface EmojiMap {
 }
 
 export interface EmojiIndexEntry extends EmojiEntry {
+  id: Snowflake;
   codePoint: string;
   index: number;
 }
@@ -59,21 +62,25 @@ import emojiMapRaw from "./assets/emoji_map.json";
 export const emojiMap: EmojiMap = emojiMapRaw as EmojiMap;
 
 import emojiNamesRaw from "./assets/emoji_names.json";
+import { Snowflake } from "./models";
 export const emojiNames: EmojiNames = emojiNamesRaw as EmojiNames;
 
 export const emojiIndex: EmojiIndex = (() => {
   const idx: EmojiIndex = {};
   var i = 0;
   EmojiFind((emoji) => {
+    const codePoint = EmojiToCodePoint(emoji.symbol);
     const entry = {
       ...emoji,
-      codePoint: EmojiToCodePoint(emoji.symbol),
+      codePoint: codePoint,
       index: i,
+      id: (CRC32.str(codePoint) >>> 0).toString(),
     };
     idx[entry.names[0]] = entry;
     idx[entry.symbol] = entry;
     idx[entry.codePoint] = entry;
-    idx[i] = entry;
+    idx[entry.index] = entry;
+    idx[entry.id] = entry;
     i++;
     return false;
   }, true);
@@ -130,6 +137,21 @@ export function EmojiLookupSymbol(symbol: string): EmojiIndexEntry | undefined {
 
 export function EmojiLookupIndex(index: number): EmojiIndexEntry | undefined {
   return emojiIndex[index];
+}
+
+export function EmojiLookupID(id: Snowflake): EmojiIndexEntry | undefined {
+  return emojiIndex[id];
+}
+
+export function EmojiCountryByFlag(name: string): string | undefined {
+  if (name.startsWith("flag_") && name.length == 7) {
+    if (name in emojiNames) {
+      if (emojiNames[name].length < 1) return undefined;
+      return emojiNames[name][0];
+    }
+  }
+
+  return undefined;
 }
 
 export function EmojiSymbolByName(name: string): string | undefined {

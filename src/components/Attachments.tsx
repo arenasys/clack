@@ -9,6 +9,7 @@ import { IconButton } from "./Common";
 import { GatewayPendingAttachment } from "../gateway";
 import { AttachmentType } from "../models";
 import { set } from "date-fns";
+import { GetFileIcon } from "../util";
 
 export function UploadTile({ file }: { file: GatewayPendingAttachment }) {
   const [spoilered, setSpoilered] = useState(file.spoilered);
@@ -32,6 +33,8 @@ export function UploadTile({ file }: { file: GatewayPendingAttachment }) {
       return (
         <video preload="None" src={file.blobURL} className="upload-thumbnail" />
       );
+    } else {
+      return GetFileIcon(file.filename, file.mimetype);
     }
     return null;
   }, [file]);

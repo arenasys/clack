@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useMemo, Suspense } from "react";
+import { useEffect, useState, useRef, useMemo, memo } from "react";
 
 import { VList, VListHandle } from "virtua";
 
@@ -28,8 +28,8 @@ import {
   EmojiSearchByPartialName,
   EmojiToCodePoint,
   EmojiLookupName,
+  EmojiCountryByFlag,
 } from "../../../emoji.tsx";
-import { set } from "date-fns";
 
 function CategoryIcon({
   category,
@@ -83,7 +83,7 @@ function EmojiPickerEntry({
 }: {
   emoji: EmojiEntry;
   selectedTone: number;
-  isSelected: (emoji: EmojiEntry) => boolean;
+  isSelected: (emoji: EmojiEntry) => string;
   onSelect: (emoji: EmojiEntry) => void;
   onClick: (emoji: EmojiEntry) => void;
   onContextMenu: (emoji: EmojiEntry, rect: DOMRect) => void;
@@ -95,7 +95,7 @@ function EmojiPickerEntry({
   return (
     <li ref={ref}>
       <button
-        className={`emoji-picker-entry ${isSelected(shown) ? "selected" : ""}`}
+        className={`emoji-picker-entry ${isSelected(shown)}`}
         onMouseMove={() => onSelect(shown)}
         onClick={() => {
           onClick(shown);
@@ -111,6 +111,50 @@ function EmojiPickerEntry({
   );
 }
 
+const EmojiPickerRow = memo(
+  function EmojiPickerRowInternal({
+    rowIndex,
+    rowItems,
+    selectedTone,
+    isSelected,
+    onClick,
+    onSelect,
+    onContextMenu,
+  }: {
+    rowIndex: number;
+    rowItems: EmojiEntry[];
+    selectedTone: number;
+    isSelected: (e: EmojiEntry) => string;
+    onClick: (e: EmojiEntry) => void;
+    onSelect: (e: EmojiEntry) => void;
+    onContextMenu: (e: EmojiEntry, r: DOMRect) => void;
+  }) {
+    return (
+      <ul className={`emoji-picker-row ${rowIndex === 0 ? "first" : ""}`}>
+        {rowItems.map((emoji, _) => (
+          <EmojiPickerEntry
+            key={emoji.symbol}
+            emoji={emoji}
+            selectedTone={selectedTone}
+            isSelected={isSelected}
+            onClick={onClick}
+            onSelect={onSelect}
+            onContextMenu={onContextMenu}
+          />
+        ))}
+      </ul>
+    );
+  },
+  (prev, next) => {
+    if (prev.selectedTone !== next.selectedTone) {
+      return false;
+    }
+    const prevWas = prev.rowItems.some((e) => prev.isSelected(e) !== "");
+    const nextIs = next.rowItems.some((e) => next.isSelected(e) !== "");
+    return !(prevWas || nextIs);
+  }
+);
+
 function EmojiPickerBody({
   data,
   listRef,
@@ -124,7 +168,7 @@ function EmojiPickerBody({
   data: React.MutableRefObject<(string | EmojiEntry[])[]>;
   listRef: React.Ref<VListHandle>;
   selectedTone: number;
-  isSelected: (emoji: EmojiEntry) => boolean;
+  isSelected: (emoji: EmojiEntry) => string;
   onScroll: () => void;
   onClick: (emoji: EmojiEntry) => void;
   onSelect: (emoji: EmojiEntry) => void;
@@ -137,44 +181,28 @@ function EmojiPickerBody({
       count={data.current.length}
       onScroll={onScroll}
     >
-      {(i) => {
-        const item = data.current[i];
-        if (typeof item === "string") {
+      {(index) => {
+        const row = data.current[index];
+        if (typeof row === "string") {
           return (
             <div className="emoji-picker-category">
-              <CategoryIcon category={item} />
+              <CategoryIcon category={row} />
               <span className="text-heading-small">
-                {item.charAt(0).toUpperCase() + item.slice(1)}
+                {row.charAt(0).toUpperCase() + row.slice(1)}
               </span>
             </div>
           );
         } else {
-          const rowItem = item as EmojiEntry[];
           return (
-            <ul
-              key={i}
-              className={`emoji-picker-row ${i === 0 ? "first" : ""} ${
-                i === data.current.length - 1 ? "last" : ""
-              }`}
-            >
-              {rowItem.map((emoji, j) => (
-                <EmojiPickerEntry
-                  key={j}
-                  emoji={emoji}
-                  selectedTone={selectedTone}
-                  isSelected={isSelected}
-                  onSelect={(emoji) => {
-                    onSelect(emoji);
-                  }}
-                  onClick={(emoji) => {
-                    onClick(emoji);
-                  }}
-                  onContextMenu={(emoji, rect) => {
-                    onContextMenu(emoji, rect);
-                  }}
-                />
-              ))}
-            </ul>
+            <EmojiPickerRow
+              rowIndex={index}
+              rowItems={row}
+              selectedTone={selectedTone}
+              isSelected={isSelected}
+              onClick={onClick}
+              onSelect={onSelect}
+              onContextMenu={onContextMenu}
+            />
           );
         }
       }}
@@ -211,6 +239,11 @@ export default function EmojiPickerPopup() {
     | undefined
   >(undefined);
   const showingMultiToneList = multiToneTarget !== undefined;
+  const wasListJustClosed = useRef<boolean>(undefined);
+
+  const selectedEmojiCountry = EmojiCountryByFlag(
+    selectedEmoji?.names[0] ?? ""
+  );
 
   const searchRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState<string>("");
@@ -221,7 +254,10 @@ export default function EmojiPickerPopup() {
   );
 
   function pickEmoji(emoji: EmojiEntry) {
-    emojiPickerPopup?.onPick(emoji.symbol);
+    var entry = EmojiLookupName(emoji.symbol);
+    if (entry === undefined) return;
+
+    emojiPickerPopup?.onPick(entry.id, entry.symbol);
     setEmojiPickerPopup(undefined);
   }
 
@@ -395,6 +431,7 @@ export default function EmojiPickerPopup() {
     if (showingToneList && toneListRef.current) {
       var rect = toneListRef.current.getBoundingClientRect();
       if (!isInsideRect(e.clientX, e.clientY, rect)) {
+        wasListJustClosed.current = true;
         setShowingToneList(false);
       }
     }
@@ -402,6 +439,7 @@ export default function EmojiPickerPopup() {
       var rect = multiToneListRef.current.getBoundingClientRect();
       if (!isInsideRect(e.clientX, e.clientY, rect)) {
         if (e.buttons !== 2) {
+          wasListJustClosed.current = true;
           setMultiToneTarget(undefined);
         }
       }
@@ -486,10 +524,13 @@ export default function EmojiPickerPopup() {
                 (child) => child.symbol === emoji.symbol
               )
             ) {
-              return false;
+              return "disabled";
             }
           }
-          return selectedEmoji?.symbol === emoji.symbol;
+          if (selectedEmoji?.symbol === emoji.symbol) {
+            return "selected";
+          }
+          return "";
         }}
         onSelect={(emoji) => {
           if (selectedEmoji?.symbol !== emoji.symbol) {
@@ -497,6 +538,10 @@ export default function EmojiPickerPopup() {
           }
         }}
         onClick={(emoji) => {
+          if (wasListJustClosed.current) {
+            wasListJustClosed.current = false;
+            return;
+          }
           pickEmoji(emoji);
         }}
         onContextMenu={(emoji, rect) => {
@@ -522,19 +567,52 @@ export default function EmojiPickerPopup() {
   }, [
     emojiPickerPopup,
     search,
-    selectedEmoji,
     selectedTone,
+    selectedEmoji,
     firstLoad,
     showingMultiToneList,
+    multiToneTarget,
   ]);
+
+  const categoryContent: any = useMemo(() => {
+    return (
+      <div className="emoji-picker-categories">
+        {Object.keys(emojiMap).map((category) => (
+          <IconButton
+            key={category}
+            className={selectedCategory === category ? "selected" : ""}
+            onClick={() => {
+              listRef.current?.scrollToIndex(
+                listData.current.indexOf(category),
+                {
+                  align: "start",
+                  smooth: false,
+                }
+              );
+            }}
+          >
+            <CategoryIcon category={category} />
+          </IconButton>
+        ))}
+      </div>
+    );
+  }, [selectedCategory]);
 
   if (emojiPickerPopup == undefined) {
     return <></>;
   }
 
+  var flip = false;
+  if (
+    emojiPickerPopup.direction == "bottom" &&
+    emojiPickerPopup.position.y < 508
+  ) {
+    flip = true;
+  }
+
   return (
     <ClickWrapper
-      passthrough={true}
+      passthrough={false}
       onClick={() => {
         setEmojiPickerPopup(undefined);
       }}
@@ -543,7 +621,8 @@ export default function EmojiPickerPopup() {
         <div
           className={
             "emoji-picker-popup emoji-picker-popup-" +
-            emojiPickerPopup.direction
+            emojiPickerPopup.direction +
+            (flip ? " flip" : "")
           }
           style={{
             bottom: emojiPickerPopup.position.y,
@@ -589,25 +668,7 @@ export default function EmojiPickerPopup() {
               </div>
             )}
           </div>
-          <div className="emoji-picker-categories">
-            {Object.keys(emojiMap).map((category) => (
-              <IconButton
-                key={category}
-                className={selectedCategory === category ? "selected" : ""}
-                onClick={() => {
-                  listRef.current?.scrollToIndex(
-                    listData.current.indexOf(category),
-                    {
-                      align: "start",
-                      smooth: false,
-                    }
-                  );
-                }}
-              >
-                <CategoryIcon category={category} />
-              </IconButton>
-            ))}
-          </div>
+          {categoryContent}
           {bodyContent}
           <div className="emoji-picker-footer">
             {selectedEmoji && (
@@ -618,7 +679,16 @@ export default function EmojiPickerPopup() {
                   key={selectedEmoji?.symbol || ""}
                 />
                 <span>
-                  {selectedEmoji?.names.map((name) => `:${name}:`).join(" ")}
+                  {selectedEmoji?.names.map((name) => `:${name}:`).join(" ")}{" "}
+                  <span
+                    style={{ display: "none" }}
+                    className="emoji-picker-information"
+                  >
+                    {EmojiToCodePoint(selectedEmoji?.symbol)}
+                  </span>
+                  <span className="emoji-picker-information">
+                    {selectedEmojiCountry}
+                  </span>
                 </span>
               </>
             )}

@@ -9,6 +9,7 @@ import { useEffect, useRef, useState, useMemo } from "react";
 import { SyntaxContent, EmojiContent } from "../syntax";
 
 import {
+  Snowflake,
   Attachment,
   AttachmentType,
   Embed,
@@ -16,11 +17,13 @@ import {
   Permissions,
 } from "../models";
 
+import { EmojiInline } from "../emoji";
+
 import { VideoDisplay, ImageDisplay } from "./Media";
 
 import { RiReplyFill, RiEmotionFill, RiMoreFill } from "react-icons/ri";
-
-import { IoMdCreate } from "react-icons/io";
+import { IoClose } from "react-icons/io5";
+import { IoMdCreate, IoMdDownload } from "react-icons/io";
 
 import {
   FormatDateTime,
@@ -36,11 +39,10 @@ import {
 import { Autocomplete, AutocompleteRef } from "./Autocomplete";
 import { MarkdownTextbox, MarkdownTextboxRef } from "./Input";
 
-import { FaFile, FaTimes } from "react-icons/fa";
+import { FaFile, FaFileUpload, FaTimes } from "react-icons/fa";
 
 import Rand from "rand-seed";
 import { IconButton, TooltipWrapper } from "./Common";
-import { set } from "date-fns";
 
 export function MessageEntry({ id }: { id: string }) {
   const content = useMemo(() => {
@@ -68,6 +70,7 @@ export function Message({
     const p = state.gateway.pendingMessages.has(id);
     const c = state.gateway.currentMessagesIsCombined.get(id)!;
     const r = state.gateway.currentReplyingTo;
+    const j = state.gateway.currentJumpedTo;
 
     var u = false;
     if (p) {
@@ -75,10 +78,12 @@ export function Message({
       u = (pending?.attachments?.length ?? 0) > 0;
     }
 
-    //const anchor = state.gateway.getAnchor();
+    if (m.id == "1940300891819085824") {
+      console.log(m, a);
+    }
+
     return {
       ...m,
-      //anchor: anchor == id,
       user: a,
       name: a?.nickname ?? a?.username,
       color: a?.color,
@@ -86,6 +91,8 @@ export function Message({
       uploading: u,
       combined: c,
       replying: r == id,
+      jumped: j == id,
+      reference: m.reference,
       you: a?.id == state.gateway.currentUser,
       permissions: state.gateway.getPermissions(
         state.gateway.currentUser!,
@@ -94,12 +101,17 @@ export function Message({
     };
   });
 
+  const rng = new Rand(id);
+
   const ref = useRef<HTMLDivElement>(null);
 
   const [isEditing, setIsEditing] = useState(false);
   const editedValue = useRef<string | undefined>();
-  const isEdited = editedValue.current !== undefined;
   const updateMessage = useChatState((state) => state.updateMessage);
+  const addReaction = useChatState((state) => state.addReaction);
+  const [isFlashing, setIsFlashing] = useState(false);
+  const flashingTimeout = useRef<number | null>(null);
+  const [isPickingEmoji, setIsPickingEmoji] = useState(false);
 
   useEffect(() => {
     editedValue.current = undefined;
@@ -110,15 +122,39 @@ export function Message({
   const setContextMenuPopup = useChatState(
     (state) => state.setContextMenuPopup
   );
+  const setEmojiPickerPopup = useChatState(
+    (state) => state.setEmojiPickerPopup
+  );
+
   const setReplyingTo = useChatState((state) => state.setReplyingTo);
+  const jumpToMessage = useChatState((state) => state.jumpToMessage);
 
   const contextMenu = useChatState((state) => {
     return state.contextMenuPopup;
   });
 
   const hasContextMenu = contextMenu?.message == id;
-  const isCombined = !standalone && (message?.combined ?? false);
+  const hasReference = message?.reference !== undefined;
+  const hasUser = message?.user !== undefined;
+  const isCombined =
+    !standalone && (message?.combined ?? false) && !hasReference;
   const isReplying = message?.replying ?? false;
+  const isJumped = message?.jumped ?? false;
+
+  useEffect(() => {
+    if (isJumped) {
+      jumpToMessage(undefined);
+      if (flashingTimeout.current) {
+        window.clearTimeout(flashingTimeout.current);
+        flashingTimeout.current = null;
+      }
+      setIsFlashing(true);
+      flashingTimeout.current = window.setTimeout(() => {
+        setIsFlashing(false);
+        flashingTimeout.current = null;
+      }, 2000);
+    }
+  }, [isJumped]);
 
   const messageContent = useMemo(() => {
     if (isEditing) {
@@ -154,11 +190,21 @@ export function Message({
     );
   }, [message?.editedTimestamp, isEditing]);
 
+  const messageReference = useMemo(() => {
+    if (message?.reference) {
+      return <MessageReference id={message.reference} />;
+    }
+    return <></>;
+  }, [message?.reference]);
+
   const permissions = message?.permissions ?? 0;
 
   const canReply = (permissions & Permissions.SendMessages) != 0;
   const canReact = (permissions & Permissions.AddReactions) != 0;
   const canEdit = message?.you;
+
+  const timestamp = new Date(message?.timestamp ?? 0);
+  const color = FormatColor(message?.color) ?? "";
 
   const messageActions = useMemo(() => {
     if (isEditing) {
@@ -185,7 +231,7 @@ export function Message({
             <IconButton
               tooltip="Edit"
               tooltipDirection="top"
-              className="message-actions-button row"
+              className={`message-actions-button row`}
               onClick={() => {
                 setIsEditing(true);
               }}
@@ -197,8 +243,31 @@ export function Message({
             <IconButton
               tooltip="Add Reaction"
               tooltipDirection="top"
-              className="message-actions-button row"
-              onClick={() => {}}
+              className={`message-actions-button row ${
+                isPickingEmoji ? "active" : ""
+              }`}
+              onClick={(rect) => {
+                if (hasContextMenu) {
+                  setContextMenuPopup(undefined);
+                }
+                setIsPickingEmoji(true);
+                setEmojiPickerPopup({
+                  position: {
+                    x: rect.left - 10,
+                    y: rect.top,
+                  },
+                  direction: "bottom",
+                  onPick: (emojiID: Snowflake, text: string) => {
+                    console.log(
+                      `Adding reaction ${text} (${emojiID}) to message ${id}`
+                    );
+                    addReaction(id, emojiID);
+                  },
+                  onClose: () => {
+                    setIsPickingEmoji(false);
+                  },
+                });
+              }}
             >
               <RiEmotionFill />
             </IconButton>
@@ -231,120 +300,170 @@ export function Message({
         </div>
       </div>
     );
-  }, [hasContextMenu, isEditing]);
+  }, [hasContextMenu, isEditing, isPickingEmoji]);
+
+  var header = useMemo(() => {
+    const timestampEl = (
+      <TooltipWrapper tooltip={FormatDateTimeLong(timestamp)} delay={1000}>
+        <span className="message-timestamp">{FormatDateTime(timestamp)}</span>
+      </TooltipWrapper>
+    );
+
+    if (hasUser) {
+      return (
+        <>
+          <img
+            className="message-avatar clickable-button"
+            src="/avatar.png"
+            onClick={(e) => {
+              if (message.user) {
+                var rect = e.currentTarget.getBoundingClientRect();
+                setUserPopup({
+                  id: message.author,
+                  user: message.user,
+                  position: {
+                    x: rect.right + 8,
+                    y: rect.top,
+                  },
+                  direction: "right",
+                });
+                e.preventDefault();
+                e.stopPropagation();
+              }
+            }}
+          />
+          <div className="message-header">
+            <span
+              className="message-name clickable-text"
+              style={{
+                color: color,
+              }}
+              onClick={(e) => {
+                if (message.user) {
+                  var rect = e.currentTarget.getBoundingClientRect();
+                  setUserPopup({
+                    id: message.author,
+                    user: message.user,
+                    position: {
+                      x: rect.right + 8,
+                      y: rect.top,
+                    },
+                    direction: "right",
+                  });
+                  e.preventDefault();
+                  e.stopPropagation();
+                }
+              }}
+              onMouseDown={(e) => {
+                // Prevent text selection on double click
+                if (e.detail > 1) {
+                  e.preventDefault();
+                }
+              }}
+            >
+              {message?.name ?? id}
+            </span>
+            {timestampEl}
+          </div>
+        </>
+      );
+    } else {
+      return (
+        <>
+          <div className="message-avatar skeleton" />
+          <div className="message-header">
+            <span
+              className="message-name skeleton"
+              style={{ width: Roll(75, 125, rng) }}
+            />
+          </div>
+        </>
+      );
+    }
+  }, [hasUser, message]);
 
   if (message === undefined) {
     return <></>;
   }
 
-  function doView(index: number) {
-    setViewerModal({
-      index: index,
-      items: [...message!.attachments!],
-    });
-  }
-
-  const timestamp = new Date(message.timestamp);
-
-  const color = FormatColor(message.color);
-
   const className =
     "message-entry" +
     (isCombined ? " combined" : "") +
     (message?.pending ? " pending" : "") +
-    (hasContextMenu ? " active" : "") +
-    (isEditing ? " editing" : "") +
-    (isReplying ? " replying" : "");
-  //(message?.anchor ? " anchor" : "");
+    (hasContextMenu || isPickingEmoji ? " active" : "") +
+    (isReplying ? " replying" : "") +
+    (isEditing ? " editing" : "");
 
-  var header = (
-    <>
-      <img className="message-avatar clickable-button" src="/avatar.png" />
-      <div className="message-header">
-        <span
-          className="message-name clickable-text"
-          style={{
-            color: color,
-          }}
-          onClick={(e) => {
-            if (message.user) {
-              var rect = e.currentTarget.getBoundingClientRect();
-              setUserPopup({
-                id: message.author,
-                user: message.user,
-                position: {
-                  x: rect.right + 8,
-                  y: rect.top,
-                },
-                direction: "right",
-              });
-              e.preventDefault();
-              e.stopPropagation();
-            }
-          }}
-        >
-          {message?.name ?? id}
-        </span>
-        <TooltipWrapper tooltip={FormatDateTimeLong(timestamp)} delay={1000}>
-          <span className="message-timestamp">{FormatDateTime(timestamp)}</span>
-        </TooltipWrapper>
-      </div>
-    </>
-  );
-
+  var attachedMedia: Attachment[] = [];
+  var attachedFiles: Attachment[] = [];
   var attachmentGroups: { attachments: Attachment[]; className: string }[] = [];
 
+  function doView(index: number) {
+    setViewerModal({
+      index: index,
+      items: [...attachedMedia],
+    });
+  }
+
   if (message.attachments) {
-    if (message.attachments.length == 1) {
+    attachedMedia = message.attachments.filter(
+      (a) => a.type == AttachmentType.Image || a.type == AttachmentType.Video
+    );
+    attachedFiles = message.attachments.filter(
+      (a) => a.type == AttachmentType.File
+    );
+
+    if (attachedMedia.length == 1) {
       attachmentGroups = [
-        { attachments: [...message.attachments], className: "group-1" },
+        { attachments: [...attachedMedia], className: "group-1" },
       ];
-    } else if (message.attachments.length == 2) {
+    } else if (attachedMedia.length == 2) {
       attachmentGroups = [
-        { attachments: [...message.attachments], className: "group-2" },
+        { attachments: [...attachedMedia], className: "group-2" },
       ];
-    } else if (message.attachments.length == 3) {
+    } else if (attachedMedia.length == 3) {
       attachmentGroups = [
-        { attachments: [...message.attachments], className: "group-3" },
+        { attachments: [...attachedMedia], className: "group-3" },
       ];
     } else {
-      var i = message.attachments.length % 3;
+      var i = attachedMedia.length % 3;
 
       if (i != 0) {
         if (i == 1) {
           attachmentGroups.push({
-            attachments: message.attachments.slice(0, 2),
+            attachments: attachedMedia.slice(0, 2),
             className: "row-2",
           });
           attachmentGroups.push({
-            attachments: message.attachments.slice(2, 4),
+            attachments: attachedMedia.slice(2, 4),
             className: "row-2",
           });
           i = 4;
         } else {
           attachmentGroups.push({
-            attachments: message.attachments.slice(0, i),
+            attachments: attachedMedia.slice(0, i),
             className: "row-" + i,
           });
         }
       }
 
-      for (; i < message.attachments.length; i += 3) {
+      for (; i < attachedMedia.length; i += 3) {
         attachmentGroups.push({
-          attachments: message.attachments.slice(i, i + 3),
+          attachments: attachedMedia.slice(i, i + 3),
           className: "row-3",
         });
       }
     }
   }
 
-  const hasAttachments = attachmentGroups.length > 0;
+  const hasAttachments = attachedMedia.length > 0 || attachedFiles.length > 0;
   const hasEmbeds = message.embeds ? true : false;
   const hasUploading = message.uploading;
+  const hasReactions = message.reactions?.length ?? 0 > 0;
   const isEmbedding = message.embeddableURLs?.length ?? 0 > 0;
 
   const hasAccessories =
-    hasAttachments || hasEmbeds || hasUploading || isEmbedding;
+    hasAttachments || hasEmbeds || hasUploading || isEmbedding || hasReactions;
 
   return (
     <div
@@ -371,6 +490,10 @@ export function Message({
         });
       }}
     >
+      <div className="message-background flash" data-on={isFlashing} />
+      {isReplying && <div className="message-background replying" />}
+
+      {hasReference && messageReference}
       {!isCombined && header}
       {isCombined && (
         <div className="message-timestamp-inline">
@@ -381,10 +504,9 @@ export function Message({
       )}
       <div className="message-content">{messageContent}</div>
       <div className="message-actions">{messageActions}</div>
-
       {hasAccessories && (
         <div className="message-accessories">
-          {attachmentGroups.length > 0 && (
+          {hasAttachments && (
             <div className="message-attachments">
               {attachmentGroups.map((group, index) => (
                 <div
@@ -392,9 +514,9 @@ export function Message({
                   className={"message-attachment-group " + group.className}
                 >
                   {group.attachments.map((attachment, index) => (
-                    <MessageAttachment
-                      attachmentIndex={message.attachments!.indexOf(attachment)}
-                      attachmentCount={message.attachments!.length}
+                    <MessageMediaAttachment
+                      attachmentIndex={attachedMedia.indexOf(attachment)}
+                      attachmentCount={attachedMedia.length}
                       key={`${id}-attachment-${index}`}
                       attachment={attachment}
                       onView={() => {
@@ -404,9 +526,15 @@ export function Message({
                   ))}
                 </div>
               ))}
+              {attachedFiles.map((attachment, index) => (
+                <MessageFileAttachment
+                  key={`${id}-file-attachment-${index}`}
+                  attachment={attachment}
+                />
+              ))}
             </div>
           )}
-          {message.embeds && (
+          {hasEmbeds && (
             <div className="message-embeds">
               {message.embeds?.map((embed, index) => (
                 <MessageEmbed key={`${id}-embed-${index}`} embed={embed} />
@@ -420,7 +548,8 @@ export function Message({
               </div>
             </div>
           )}
-          {message.uploading && <MessageUpload id={id} />}
+          {hasUploading && <MessageUpload id={id} />}
+          {hasReactions && <MessageReactions id={id} />}
         </div>
       )}
     </div>
@@ -513,29 +642,30 @@ function MessageUpload({ id }: { id: string }) {
   var text = "????";
 
   if (pending?.attachments) {
-    var first = pending.attachments[0];
-    icon = GetFileIcon(first.filename, first.type);
     if (pending.attachments.length == 1) {
-      text = pending.attachments[0].filename;
+      var first = pending.attachments[0];
+      icon = GetFileIcon(first.filename, first.mimetype);
+      text = first.filename;
     } else {
+      icon = <FaFileUpload />;
       text = `Uploading ${pending.attachments.length} files...`;
     }
   }
 
   return (
-    <div className="message-upload">
-      <div className="message-upload-icon">{icon}</div>
-      <div className="message-upload-content">
-        <div className="message-upload-text">
-          {text}
-          <div className="message-upload-size">
-            {` – ${FormatBytes(pending?.size)}`}
+    <div className="message-file">
+      <div className="message-file-icon">{icon}</div>
+      <div className="message-file-content">
+        <div className="message-file-title">
+          <div className="message-file-text">{text + " "}</div>
+          <div className="message-file-size inline">
+            {`– ${FormatBytes(pending?.size)}`}
           </div>
         </div>
 
-        <div className="message-upload-progress">
+        <div className="message-file-progress">
           <div
-            className="message-upload-progress-bar"
+            className="message-file-progress-bar"
             style={{
               width: `${pending?.progress ?? 0}%`,
             }}
@@ -545,7 +675,7 @@ function MessageUpload({ id }: { id: string }) {
       <IconButton
         tooltip="Cancel"
         tooltipDirection="top"
-        className="message-upload-cancel"
+        className="message-file-button"
         onClick={() => {
           cancel(id);
         }}
@@ -785,7 +915,7 @@ function MessageRichEmbed({ embed }: { embed: Embed }) {
   );
 }
 
-function MessageAttachment({
+function MessageMediaAttachment({
   attachmentIndex,
   attachmentCount,
   attachment,
@@ -882,6 +1012,42 @@ function MessageAttachment({
   );
 }
 
+function MessageFileAttachment({ attachment }: { attachment: Attachment }) {
+  var icon = GetFileIcon(attachment.filename, attachment.mimetype);
+  return (
+    <div className="message-file">
+      <div className="message-file-icon">{icon}</div>
+      <div className="message-file-content">
+        <a
+          className="message-file-text message-file-link"
+          href={attachment.originalURL}
+          rel="noreferrer noopener"
+          target="_blank"
+        >
+          {attachment.filename}
+        </a>
+        <div className="message-file-size">
+          {`${FormatBytes(attachment.size)}`}
+        </div>
+      </div>
+      <a
+        href={attachment.originalURL}
+        rel="noreferrer noopener"
+        target="_blank"
+      >
+        <IconButton
+          tooltip="Download"
+          tooltipDirection="top"
+          className="message-file-button download"
+          onClick={() => {}}
+        >
+          <IoMdDownload />
+        </IconButton>
+      </a>
+    </div>
+  );
+}
+
 function MessageEditedTimestamp({ timestamp }: { timestamp: number }) {
   return (
     <TooltipWrapper
@@ -893,23 +1059,121 @@ function MessageEditedTimestamp({ timestamp }: { timestamp: number }) {
   );
 }
 
+function MessageReference({ id }: { id: string }) {
+  const message = useChatStateShallow((state) => {
+    const m = state.gateway.messages.get(id);
+    if (!m) return undefined;
+
+    const a = state.gateway.users.get(m.author);
+    return {
+      ...m,
+      user: a,
+      name: a?.nickname ?? a?.username,
+      color: a?.color,
+    };
+  });
+  const setUserPopup = useChatState((state) => state.setUserPopup);
+  const jumpToMessage = useChatState((state) => state.jumpToMessage);
+
+  return (
+    <div
+      className="message-reference"
+      onClick={(e) => {
+        if (message) {
+          jumpToMessage(message.id);
+        }
+      }}
+    >
+      <div className="message-reference-decoration">
+        <div className="message-reference-pointer" />
+      </div>
+      <div className="message-reference-content">
+        {message ? (
+          <>
+            <span
+              className="message-reference-user"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!message.user) return;
+                var rect = e.currentTarget.getBoundingClientRect();
+                setUserPopup({
+                  id: message.author,
+                  user: message.user,
+                  position: {
+                    x: rect.right + 8,
+                    y: rect.top,
+                  },
+                  direction: "right",
+                });
+              }}
+            >
+              <img className="message-reference-avatar" src="/avatar.png" />
+              <span
+                className="message-reference-name clickable-text"
+                style={{ color: FormatColor(message.color) }}
+              >
+                {"@"}
+                {message.name ?? message.id}
+              </span>
+            </span>{" "}
+            <span className="message-reference-content">
+              <SyntaxContent text={message.content} inline />
+            </span>
+          </>
+        ) : (
+          <>
+            <span className="message-reference-avatar">
+              <IoClose />
+            </span>
+            <span className="message-reference-error">
+              Original message was deleted
+            </span>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MessageReactions({ id }: { id: string }) {
+  const reactions = useChatStateShallow((state) => {
+    return state.gateway.messages.get(id)?.reactions ?? [];
+  });
+
+  return (
+    <div className="message-reactions">
+      {reactions.map((react, index) => {
+        return (
+          <div
+            key={`${id}-reaction-${index}`}
+            className={`message-reaction ${react.me ? "you" : ""}`}
+          >
+            <EmojiInline text={react.emoji} />
+            <span className="message-reaction-count">{react.count}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function Skeleton({ id }: { id: string }) {
-  const gen = new Rand(id.split("-")[1]);
+  const rng = new Rand(id.split("-")[1]);
   const row = () => {
-    const count = Roll(3, 8, gen);
+    const count = Roll(3, 8, rng);
     var length = 0;
     var bubbles = [];
     for (var i = 0; i < count && length < 500; i++) {
-      const bubbleLength = Roll(30, 80, gen);
+      const bubbleLength = Roll(30, 80, rng);
       bubbles.push(bubbleLength);
       length += bubbleLength;
     }
     return bubbles;
   };
 
-  const hasMedia = Roll(0, 100, gen) < 40;
-  const rowCount = Roll(1, 5, gen) + (hasMedia ? 1 : 0);
-  const mediaRow = hasMedia ? Roll(1, rowCount, gen) : -1;
+  const hasMedia = Roll(0, 100, rng) < 40;
+  const rowCount = Roll(1, 5, rng) + (hasMedia ? 1 : 0);
+  const mediaRow = hasMedia ? Roll(1, rowCount, rng) : -1;
 
   return (
     <div id={id} className="message-entry skeleton">
@@ -918,7 +1182,7 @@ function Skeleton({ id }: { id: string }) {
         <div className="message-header skeleton">
           <div
             className="message-name skeleton"
-            style={{ width: Roll(75, 125, gen) }}
+            style={{ width: Roll(75, 125, rng) }}
           />
         </div>
         <div className="message-content">
@@ -930,8 +1194,8 @@ function Skeleton({ id }: { id: string }) {
                     key={i}
                     className="message-skeleton-media"
                     style={{
-                      width: Roll(150, 400, gen),
-                      height: Roll(150, 400, gen),
+                      width: Roll(150, 400, rng),
+                      height: Roll(150, 400, rng),
                     }}
                   />
                 );

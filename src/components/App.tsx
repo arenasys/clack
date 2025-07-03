@@ -4,6 +4,7 @@ import You from "./You";
 import Channels from "./Channels";
 import Client from "./Client";
 import Header from "./Header";
+import { IconButton } from "./Common";
 import AttachmentModal from "./layers/modals/AttachmentModal";
 import ViewerModal from "./layers/modals/ViewerModal";
 import DeleteMessageModal from "./layers/modals/DeleteMessageModal";
@@ -19,10 +20,12 @@ import CaptchaScreen from "./layers/CaptchaScreen";
 import { RiArrowDownSLine } from "react-icons/ri";
 import { ErrorBoundary } from "react-error-boundary";
 import { Fallback, FallbackLayer } from "./Error";
+import { useEffect, useRef } from "react";
+import { last } from "slate";
 
 function App() {
   return (
-    <>
+    <div id="root">
       <Client />
       <div className="monospace-preload">Clack</div>
       <div id="sidebar-container"></div>
@@ -30,9 +33,9 @@ function App() {
         <div id="header-container">
           <div id="left-header-container">
             <h2 className="server-name">Clack</h2>
-            <button className="server-dropdown-button">
-              <RiArrowDownSLine className="dropdown-icon" />
-            </button>
+            <IconButton className="server-dropdown-button foreground">
+              <RiArrowDownSLine className="icon" />
+            </IconButton>
           </div>
           <div id="center-header-container">
             <ErrorBoundary FallbackComponent={Fallback}>
@@ -117,7 +120,7 @@ function App() {
       <ErrorBoundary FallbackComponent={FallbackLayer}>
         <TooltipPopup />
       </ErrorBoundary>
-    </>
+    </div>
   );
 }
 

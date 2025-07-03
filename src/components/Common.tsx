@@ -204,9 +204,6 @@ export function ClickWrapper({
         requestAnimationFrame(() => onClick());
       }
       pointerDowned.current = false;
-
-      e.stopImmediatePropagation();
-      e.stopPropagation();
       e.preventDefault();
     }
 

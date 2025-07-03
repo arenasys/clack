@@ -181,13 +181,15 @@ export interface Embed {
 }
 
 export interface Emoji {
-  id?: Snowflake;
+  id: Snowflake;
   name: string;
 }
 
 export interface Reaction {
-  emoji: Emoji;
+  emoji: Snowflake;
+  count: number;
   users: Snowflake[];
+  me: boolean;
 }
 
 export const enum Permissions {

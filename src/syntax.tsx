@@ -759,7 +759,13 @@ export function GetMatches(
   return matches;
 }
 
-export function SyntaxContent({ text }: { text: string }) {
+export function SyntaxContent({
+  text,
+  inline,
+}: {
+  text: string;
+  inline?: boolean;
+}) {
   const lookups = GetChatStateLookups();
 
   var ranges: SyntaxRange[] = ParseRanges(text, [], fullRuleOrdering);
@@ -783,7 +789,7 @@ export function SyntaxContent({ text }: { text: string }) {
         if (match.start > last) {
           elementChildren.push(elementText.substring(last, match.start));
         }
-        const jumbo = match.start == 0 && match.end == text.length;
+        const jumbo = !inline && match.start == 0 && match.end == text.length;
         elementChildren.push(
           <EmojiInline text={match.emoji} jumbo={jumbo} key={`range-${i++}`} />
         );

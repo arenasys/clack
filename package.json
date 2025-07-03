@@ -13,12 +13,14 @@
     "@faker-js/faker": "^9.3.0",
     "@hcaptcha/react-hcaptcha": "^1.12.0",
     "@twemoji/api": "^16.0.1",
+    "crc-32": "^1.2.2",
     "date-fns": "^4.1.0",
     "fuzzysort": "^3.1.0",
     "highlight.js": "^11.11.1",
     "immer": "^10.1.1",
     "is-hotkey": "^0.2.0",
     "js-sha256": "^0.11.0",
+    "nanoevents": "^9.1.0",
     "rand-seed": "^2.1.7",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -30,7 +32,7 @@
     "slate-react": "^0.112.0",
     "universal-cookie": "^8.0.1",
     "virtua": "^0.39.2",
-    "zustand": "^5.0.2"
+    "zustand": "^5.0.6"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

@@ -211,7 +211,7 @@
       "version": 7
     },
     {
-      "names": ["frowning2", "white_frowning_face", "frowning_face"],
+      "names": ["frowning", "frowning_face"],
       "symbol": "☹️",
       "version": 1.1
     },
@@ -234,6 +234,11 @@
       "names": ["weary", "weary_face"],
       "symbol": "😩",
       "version": 6
+    },
+    {
+      "names": ["exhausted", "exhausted_face"],
+      "symbol": "🫩",
+      "version": 16
     },
     {
       "names": ["pleading_face"],
@@ -421,7 +426,7 @@
       "version": 6.1
     },
     {
-      "names": ["frowning"],
+      "names": ["sad", "frowning_with_open_mouth"],
       "symbol": "😦",
       "version": 6.1
     },
@@ -3108,6 +3113,11 @@
       "names": ["footprints"],
       "symbol": "👣",
       "version": 6
+    },
+    {
+      "names": ["fingerprint"],
+      "symbol": "🫆",
+      "version": 16
     },
     {
       "names": ["eye"],
@@ -11854,51 +11864,142 @@
       "version": 6
     },
     {
-      "names": ["levitate", "man_in_business_suit_levitating"],
+      "names": ["levitating"],
       "symbol": "🕴️",
-      "version": 7,
+      "version": 9,
+      "hasDiversity": true,
+      "diversityChildren": [
+        {
+          "names": ["levitating_tone1", "levitating_light_skin_tone"],
+          "symbol": "🕴🏻",
+          "version": 9,
+          "diversity": ["1f3fb"],
+          "hasDiversityParent": true
+        },
+        {
+          "names": ["levitating_tone2", "levitating_medium_light_skin_tone"],
+          "symbol": "🕴🏼",
+          "version": 9,
+          "diversity": ["1f3fc"],
+          "hasDiversityParent": true
+        },
+        {
+          "names": ["levitating_tone3", "levitating_medium_skin_tone"],
+          "symbol": "🕴🏽",
+          "version": 9,
+          "diversity": ["1f3fd"],
+          "hasDiversityParent": true
+        },
+        {
+          "names": ["levitating_tone4", "levitating_medium_dark_skin_tone"],
+          "symbol": "🕴🏾",
+          "version": 9,
+          "diversity": ["1f3fe"],
+          "hasDiversityParent": true
+        },
+        {
+          "names": ["levitating_tone5", "levitating_dark_skin_tone"],
+          "symbol": "🕴🏿",
+          "version": 9,
+          "diversity": ["1f3ff"],
+          "hasDiversityParent": true
+        }
+      ]
+    },
+    {
+      "names": ["woman_levitating"],
+      "symbol": "🕴️‍♀️",
+      "version": 9,
       "hasDiversity": true,
       "diversityChildren": [
         {
           "names": [
-            "levitate_tone1",
-            "man_in_business_suit_levitating_tone1",
-            "man_in_business_suit_levitating_light_skin_tone"
+            "woman_levitating_tone1",
+            "woman_levitating_light_skin_tone"
           ],
-          "symbol": "🕴🏻",
+          "symbol": "🕴🏻‍♀️",
+          "version": 9,
+          "diversity": ["1f3fb"],
+          "hasDiversityParent": true
+        },
+        {
+          "names": [
+            "woman_levitating_tone2",
+            "woman_levitating_medium_light_skin_tone"
+          ],
+          "symbol": "🕴🏼‍♀️",
+          "version": 9,
+          "diversity": ["1f3fc"],
+          "hasDiversityParent": true
+        },
+        {
+          "names": [
+            "woman_levitating_tone3",
+            "woman_levitating_medium_skin_tone"
+          ],
+          "symbol": "🕴🏽‍♀️",
+          "version": 9,
+          "diversity": ["1f3fd"],
+          "hasDiversityParent": true
+        },
+        {
+          "names": [
+            "woman_levitating_tone4",
+            "woman_levitating_medium_dark_skin_tone"
+          ],
+          "symbol": "🕴🏾‍♀️",
+          "version": 9,
+          "diversity": ["1f3fe"],
+          "hasDiversityParent": true
+        },
+        {
+          "names": [
+            "woman_levitating_tone5",
+            "woman_levitating_dark_skin_tone"
+          ],
+          "symbol": "🕴🏿‍♀️",
+          "version": 9,
+          "diversity": ["1f3ff"],
+          "hasDiversityParent": true
+        }
+      ]
+    },
+    {
+      "names": ["man_levitating"],
+      "symbol": "🕴️‍♂️",
+      "version": 7,
+      "hasDiversity": true,
+      "diversityChildren": [
+        {
+          "names": ["man_levitating_tone1", "man_levitating_light_skin_tone"],
+          "symbol": "🕴🏻‍♂️",
           "version": 8,
           "diversity": ["1f3fb"],
           "hasDiversityParent": true
         },
         {
           "names": [
-            "levitate_tone2",
-            "man_in_business_suit_levitating_tone2",
-            "man_in_business_suit_levitating_medium_light_skin_tone"
+            "man_levitating_tone2",
+            "man_levitating_medium_light_skin_tone"
           ],
-          "symbol": "🕴🏼",
+          "symbol": "🕴🏼‍♂️",
           "version": 8,
           "diversity": ["1f3fc"],
           "hasDiversityParent": true
         },
         {
-          "names": [
-            "levitate_tone3",
-            "man_in_business_suit_levitating_tone3",
-            "man_in_business_suit_levitating_medium_skin_tone"
-          ],
-          "symbol": "🕴🏽",
+          "names": ["man_levitating_tone3", "man_levitating_medium_skin_tone"],
+          "symbol": "🕴🏽‍♂️",
           "version": 8,
           "diversity": ["1f3fd"],
           "hasDiversityParent": true
         },
         {
           "names": [
-            "levitate_tone4",
-            "man_in_business_suit_levitating_tone4",
-            "man_in_business_suit_levitating_medium_dark_skin_tone"
+            "man_levitating_tone4",
+            "man_levitating_medium_dark_skin_tone"
           ],
-          "symbol": "🕴🏾",
+          "symbol": "🕴🏽‍♂️",
           "version": 8,
           "diversity": ["1f3fe"],
           "hasDiversityParent": true
@@ -11906,10 +12007,10 @@
         {
           "names": [
             "levitate_tone5",
-            "man_in_business_suit_levitating_tone5",
-            "man_in_business_suit_levitating_dark_skin_tone"
+            "man_levitating_tone5",
+            "man_levitating_dark_skin_tone"
           ],
-          "symbol": "🕴🏿",
+          "symbol": "🕴🏿‍♂️",
           "version": 8,
           "diversity": ["1f3ff"],
           "hasDiversityParent": true
@@ -18159,6 +18260,11 @@
       "version": 6
     },
     {
+      "names": ["leafless_tree"],
+      "symbol": "🪾",
+      "version": 16
+    },
+    {
       "names": ["palm_tree"],
       "symbol": "🌴",
       "version": 6
@@ -18734,6 +18840,11 @@
       "names": ["ginger_root"],
       "symbol": "🫚",
       "version": 15
+    },
+    {
+      "names": ["radish"],
+      "symbol": "🫜",
+      "version": 16
     },
     {
       "names": ["croissant"],
@@ -19380,7 +19491,45 @@
     {
       "names": ["skier"],
       "symbol": "⛷️",
-      "version": 5.2
+      "version": 5.2,
+      "hasDiversity": true,
+      "diversityChildren": [
+        {
+          "names": ["skier_tone1", "skier_light_skin_tone"],
+          "symbol": "⛷🏻",
+          "version": 8,
+          "diversity": ["1f3fb"],
+          "hasDiversityParent": true
+        },
+        {
+          "names": ["skier_tone2", "skier_medium_light_skin_tone"],
+          "symbol": "⛷🏼",
+          "version": 8,
+          "diversity": ["1f3fc"],
+          "hasDiversityParent": true
+        },
+        {
+          "names": ["skier_tone3", "skier_medium_skin_tone"],
+          "symbol": "⛷🏽",
+          "version": 8,
+          "diversity": ["1f3fd"],
+          "hasDiversityParent": true
+        },
+        {
+          "names": ["skier_tone4", "skier_medium_dark_skin_tone"],
+          "symbol": "⛷🏾",
+          "version": 8,
+          "diversity": ["1f3fe"],
+          "hasDiversityParent": true
+        },
+        {
+          "names": ["skier_tone5", "skier_dark_skin_tone"],
+          "symbol": "⛷🏿",
+          "version": 8,
+          "diversity": ["1f3ff"],
+          "hasDiversityParent": true
+        }
+      ]
     },
     {
       "names": ["snowboarder"],
@@ -21795,6 +21944,11 @@
       "version": 15
     },
     {
+      "names": ["harp"],
+      "symbol": "🪉",
+      "version": 16
+    },
+    {
       "names": ["game_die"],
       "symbol": "🎲",
       "version": 6
@@ -22417,6 +22571,11 @@
       "version": 6
     },
     {
+      "names": ["shibuya_109_department_store"],
+      "symbol": "",
+      "version": 0
+    },
+    {
       "names": ["rice_scene"],
       "symbol": "🎑",
       "version": 6
@@ -22822,6 +22981,11 @@
       "names": ["pick"],
       "symbol": "⛏️",
       "version": 5.2
+    },
+    {
+      "names": ["shovel"],
+      "symbol": "🪏",
+      "version": 16
     },
     {
       "names": ["carpentry_saw"],
@@ -24291,6 +24455,11 @@
       "names": ["zzz"],
       "symbol": "💤",
       "version": 6
+    },
+    {
+      "names": ["splatter"],
+      "symbol": "🫟",
+      "version": 16
     },
     {
       "names": ["atm"],
@@ -25848,6 +26017,11 @@
       "names": ["flag_gg"],
       "symbol": "🇬🇬",
       "version": 6
+    },
+    {
+      "names": ["flag_cq"],
+      "symbol": "🇨🇶",
+      "version": 16
     },
     {
       "names": ["flag_gn"],

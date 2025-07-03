@@ -33,7 +33,8 @@ export interface UserPopupState {
 export interface EmojiPickerPopupState {
   position: { x: number; y: number };
   direction: "top" | "bottom";
-  onPick: (emoji: string) => void;
+  onPick: (id: Snowflake, text: string) => void;
+  onClose: () => void;
 }
 
 export interface ViewerModalState {
@@ -110,7 +111,9 @@ export interface ChatState {
   updateMessage: (message: Snowflake, content: string) => void;
   deleteMessage: (message: Snowflake) => void;
   cancelMessage: (message: Snowflake) => void;
+  addReaction: (message: Snowflake, emoji: Snowflake) => void;
   setChatScroll: (top: string, center: string, bottom: string) => void;
+  jumpToMessage: (message: Snowflake | string | undefined) => void;
   setUserScroll: (
     topGroup: string,
     topIndex: number,
@@ -216,10 +219,24 @@ export const useChatState = create<ChatState>()((set) => {
           state.update(state);
         })
       ),
+    addReaction: (message, emoji) =>
+      set(
+        produce((state: ChatState) => {
+          state.gateway.addReaction(message, emoji);
+          state.update(state);
+        })
+      ),
     setChatScroll: async (top, center, bottom) =>
       set(
         produce((state: ChatState) => {
           state.gateway.setChatScroll(top, center, bottom);
+          state.update(state);
+        })
+      ),
+    jumpToMessage: async (message) =>
+      set(
+        produce((state: ChatState) => {
+          state.gateway.jumpToMessage(message);
           state.update(state);
         })
       ),
@@ -239,6 +256,9 @@ export const useChatState = create<ChatState>()((set) => {
       var idx = 0;
       set(
         produce((state: ChatState) => {
+          if (tooltipPopup === state.tooltipPopup) {
+            return;
+          }
           state.tooltipPopup = tooltipPopup;
           state.tooltipIndex += 1;
           idx = state.tooltipIndex;
@@ -273,13 +293,13 @@ export const useChatState = create<ChatState>()((set) => {
     setEmojiPickerPopup: (emojiPickerPopup) =>
       set(
         produce((state: ChatState) => {
-          if (
-            emojiPickerPopup !== undefined &&
-            emojiPickerPopup.direction === "top"
-          ) {
+          if (emojiPickerPopup !== undefined) {
             emojiPickerPopup.position = changeAnchoring(
               emojiPickerPopup.position
             );
+          }
+          if (state.emojiPickerPopup !== undefined) {
+            state.emojiPickerPopup.onClose();
           }
 
           state.emojiPickerPopup = emojiPickerPopup;
@@ -414,6 +434,7 @@ export const useChatState = create<ChatState>()((set) => {
 
       return results.map((e) => {
         const emoji: Emoji = {
+          id: "",
           name: e.symbol,
         };
         return emoji;

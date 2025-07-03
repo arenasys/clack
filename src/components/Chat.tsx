@@ -1,9 +1,6 @@
-import {
-  RiAddCircleFill,
-  RiCloseCircleFill,
-  RiEmotionFill,
-} from "react-icons/ri";
-import { IoMdCloseCircle } from "react-icons/io";
+import { RiAddCircleFill, RiEmotionFill } from "react-icons/ri";
+import { IoClose } from "react-icons/io5";
+import { IoIosArrowDown } from "react-icons/io";
 
 import { useChatState, useChatStateShallow } from "../state";
 
@@ -25,12 +22,12 @@ import { MarkdownTextbox, MarkdownTextboxRef } from "./Input";
 import { IconButton, TooltipWrapper } from "./Common";
 import List from "./List";
 import { Descendant } from "slate";
-import { IoClose } from "react-icons/io5";
 
 export function Chat() {
   const messageView = useChatState((state) => state.gateway.currentMessages);
   const anchor = useChatState((state) => state.gateway.getChatScroll() ?? "");
   const setAnchor = useChatState((state) => state.setChatScroll);
+  const setTooltipPopup = useChatState((state) => state.setTooltipPopup);
 
   return (
     <List
@@ -47,6 +44,9 @@ export function Chat() {
         );
       }}
       defaultBottom={true}
+      onScroll={() => {
+        setTooltipPopup(undefined);
+      }}
     ></List>
   );
 }
@@ -60,6 +60,7 @@ export function Input() {
 
   const currentChannel = useChatState((state) => state.gateway.currentChannel);
   const sendMessage = useChatState((state) => state.sendMessage);
+  const jumpToMessage = useChatState((state) => state.jumpToMessage);
 
   const setAttachments = useChatState((state) => state.setAttachments);
   const attaching = useChatState(
@@ -72,7 +73,8 @@ export function Input() {
         file: file,
         filename: file.name,
         spoilered: false,
-        type: GetFileType(file),
+        type: GetFileType(file.type),
+        mimetype: file.type,
         blobURL: "",
       };
     });
@@ -96,6 +98,10 @@ export function Input() {
     };
   });
   const setReplyingTo = useChatState((state) => state.setReplyingTo);
+
+  const showJumpToPresent = useChatState(
+    (state) => state.gateway.currentJumpToPresent
+  );
 
   const setEmojiPickerPopup = useChatState(
     (state) => state.setEmojiPickerPopup
@@ -151,11 +157,25 @@ export function Input() {
   );
 
   const isReplying = replyingTo !== undefined;
+  const isJumpable = showJumpToPresent && !isReplying;
   const isAttaching = attaching;
 
   return (
     <>
       {autocomplete}
+
+      {isJumpable && (
+        <div
+          id="jump-container"
+          onClick={() => {
+            jumpToMessage("bottom");
+          }}
+        >
+          You're viewing older messages
+          <span className="jump-label">Jump To Present</span>
+          <IoIosArrowDown className="jump-icon" />
+        </div>
+      )}
 
       {isReplying && (
         <div id="reply-to-container">
@@ -195,12 +215,16 @@ export function Input() {
           </IconButton>
         </div>
       )}
-      {isAttaching && <Attachments className={isReplying ? "combined" : ""} />}
+      {isAttaching && (
+        <Attachments
+          className={isReplying || showJumpToPresent ? "combined" : ""}
+        />
+      )}
       <div
         id="textbox-container"
         className={
           "input-scrollbar" +
-          (isAttaching || isReplying ? " combined" : "") +
+          (isAttaching || isReplying || showJumpToPresent ? " combined" : "") +
           (isAttaching ? " divider" : "")
         }
       >
@@ -249,11 +273,12 @@ export function Input() {
                 y: rect.top - 10,
               },
               direction: "top",
-              onPick: (emoji: string) => {
+              onPick: (_, text: string) => {
                 if (textboxRef.current) {
-                  textboxRef.current.insert(emoji + " ");
+                  textboxRef.current.insert(text + " ");
                 }
               },
+              onClose: () => {},
             });
           }}
         >

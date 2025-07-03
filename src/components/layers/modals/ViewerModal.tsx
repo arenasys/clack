@@ -23,6 +23,7 @@ export default function ViewerModal() {
 
   function doLeft() {
     if (viewerModal == undefined) return;
+    if (viewerModal.items.length <= 1) return;
     setViewerModal({
       items: viewerModal.items,
       index: mod(viewerModal.index - 1, viewerModal.items.length),
@@ -31,6 +32,7 @@ export default function ViewerModal() {
 
   function doRight() {
     if (viewerModal == undefined) return;
+    if (viewerModal.items.length <= 1) return;
     setViewerModal({
       items: viewerModal.items,
       index: mod(viewerModal.index + 1, viewerModal.items.length),
@@ -71,6 +73,21 @@ export default function ViewerModal() {
   useEffect(() => {
     setIsClosing(false);
     setIsLoaded(false);
+
+    /*for (const item of viewerModal?.items ?? []) {
+      if (item.type == AttachmentType.Video) {
+        const video = document.createElement("video");
+        video.src = item.originalURL!;
+        video.preload = "metadata";
+        video.load();
+        console.log("Preloading video", item.originalURL);
+      }
+      if (item.type == AttachmentType.Image) {
+        const img = new Image();
+        img.src = item.displayURL!;
+        console.log("Preloading image", item.displayURL);
+      }
+    }*/
 
     window.removeEventListener("keydown", onKeydown);
 
@@ -131,13 +148,37 @@ export default function ViewerModal() {
       );
     }
 
-    console.log("MEDIA", item.width, item.height, displayWidth, displayHeight);
+    var outer = (
+      <div
+        className={"viewer-attachment"}
+        onClick={(e) => {
+          e.stopPropagation();
+        }}
+        style={{
+          width: displayWidth,
+          height: displayHeight,
+        }}
+      >
+        <div className="viewer-options-container">
+          <a
+            className="link"
+            href={item.originalURL}
+            rel="noreferrer noopener"
+            target="_blank"
+          >
+            Open in Browser
+          </a>
+        </div>
+        <div className="viewer-media-container">{inner}</div>
+      </div>
+    );
 
     return {
       inner: inner,
+      outer: outer,
       width: displayWidth,
       height: displayHeight,
-      multi: (viewerModal?.items.length ?? 0) >= 1,
+      multi: (viewerModal?.items.length ?? 0) > 1,
     };
   }, [item]);
 
@@ -199,28 +240,7 @@ export default function ViewerModal() {
         )}
       </div>
 
-      <div
-        className={"viewer-attachment"}
-        onClick={(e) => {
-          e.stopPropagation();
-        }}
-        style={{
-          width: media.width,
-          height: media.height,
-        }}
-      >
-        <div className="viewer-options-container">
-          <a
-            className="link"
-            href={item.originalURL}
-            rel="noreferrer noopener"
-            target="_blank"
-          >
-            Open in Browser
-          </a>
-        </div>
-        <div className="viewer-media-container">{media.inner}</div>
-      </div>
+      {media.outer}
     </Modal>
   );
 }

@@ -7,6 +7,7 @@ interface anchorState {
   scrollCenter: string;
   scrollBottom: string;
   scrollAtBottom: boolean;
+  scrollAnchorForced: boolean;
 
   scrollDefaultBottom: boolean;
 
@@ -32,8 +33,6 @@ function updateScrollPositions(state: anchorState, data: string[]) {
 }
 
 function fixScroll(state: anchorState, scrollEl: HTMLElement) {
-  //console.log("FIX SCROLL", anchorId);
-
   if (state.scrollAtBottom) {
     scrollEl.scrollTop = scrollEl.scrollHeight;
   } else if (state.scrollAnchor == "") {
@@ -49,14 +48,11 @@ function fixScroll(state: anchorState, scrollEl: HTMLElement) {
         console.log("SCROLL VIA ELEMENT", state.scrollAnchor);
         anchorEl.scrollIntoView({ behavior: "instant", block: "center" });
       } else {
-        const offset = anchorEl.offsetTop - scrollEl.scrollTop;
-
-        /*console.log(
+        console.log(
           "SCROLL VIA OFFSET",
-          anchorId,
-          offset,
-          scrollEl.scrollHeight - offset
-        );*/
+          state.scrollAnchor,
+          state.anchorOffset
+        );
 
         scrollEl.scrollTop = anchorEl.offsetTop - state.anchorOffset;
       }
@@ -74,6 +70,7 @@ function scrollMutation(state: anchorState) {
   if (scrollHeight != state.lastScrollHeight) {
     state.lastMutation = Date.now();
     state.lastScrollHeight = scrollHeight;
+    console.log("FIX SCROLL, SCROLL MUTATION");
     fixScroll(state, scrollEl);
     state.scrollPositionsStale = true;
   }
@@ -85,9 +82,15 @@ function outerMutation(state: anchorState, ref: HTMLDivElement) {
 
   const outerHeight = ref.clientHeight;
   if (outerHeight != state.lastOuterHeight) {
-    console.log("OUTER HEIGHT", outerHeight, state.lastOuterHeight);
+    /*console.log(
+      "OUTER MUTATION",
+      outerHeight,
+      state.lastOuterHeight,
+      Date.now()
+    );*/
     state.lastMutation = Date.now();
     state.lastOuterHeight = outerHeight;
+    console.log("FIX SCROLL, OUTER MUTATION");
     fixScroll(state, scrollEl);
     state.scrollPositionsStale = true;
   }
@@ -106,7 +109,8 @@ async function resyncScrollAnchors(
   outerRef: React.RefObject<HTMLDivElement>,
   messageView: string[],
   anchor: string,
-  setAnchor: (top: string, center: string, bottom: string) => void
+  setAnchor: (top: string, center: string, bottom: string) => void,
+  readonly: boolean
 ) {
   if (!outerRef.current) return;
 
@@ -150,19 +154,36 @@ async function resyncScrollAnchors(
   const atBottom = currentBottom >= outerRef.current.scrollHeight - 100;
 
   if (atBottom) {
-    const newAnchor = messageView[messageView.length - 1];
-    if (anchor != newAnchor) {
-      setAnchor(state.scrollTop, newAnchor, newAnchor);
-      state.scrollAnchor = newAnchor;
-      state.scrollAtBottom = true;
+    var newAnchor = messageView[messageView.length - 1];
+    if (readonly || state.scrollAnchorForced) {
+      newAnchor = anchor;
     }
+
+    setAnchor(state.scrollTop, newAnchor, newAnchor);
+    if (newAnchor != state.scrollAnchor) {
+      console.log("ANCHOR CHANGED RESYNC BOTTOM", newAnchor);
+    }
+
+    state.scrollAnchor = newAnchor;
+    state.scrollAtBottom = true;
   } else {
-    if (anchor != state.scrollCenter) {
-      setAnchor(state.scrollTop, state.scrollCenter, state.scrollBottom);
-      state.scrollAnchor = state.scrollCenter;
-      state.scrollAtBottom = false;
+    var newAnchor = state.scrollCenter;
+
+    if (readonly || state.scrollAnchorForced) {
+      newAnchor = anchor;
     }
+
+    setAnchor(state.scrollTop, newAnchor, state.scrollBottom);
+
+    if (newAnchor != state.scrollAnchor) {
+      console.log("ANCHOR CHANGED RESYNC", newAnchor);
+    }
+
+    state.scrollAnchor = newAnchor;
+    state.scrollAtBottom = false;
   }
+
+  state.scrollAnchorForced = false;
 }
 
 export function List({
@@ -172,6 +193,7 @@ export function List({
   anchor,
   setAnchor,
   entry,
+  onScroll,
   defaultBottom,
 }: {
   id: string;
@@ -180,6 +202,7 @@ export function List({
   anchor: string;
   setAnchor: (top: string, center: string, bottom: string) => void;
   entry: (id: string) => JSX.Element;
+  onScroll?: (scrollTop: number) => void;
   defaultBottom: boolean;
 }) {
   const outerRef = useRef<HTMLDivElement>(null);
@@ -194,6 +217,7 @@ export function List({
       scrollCenter: "",
       scrollBottom: "",
       scrollAtBottom: false,
+      scrollAnchorForced: false,
 
       scrollDefaultBottom: defaultBottom,
 
@@ -209,6 +233,8 @@ export function List({
   }
 
   var state = globalState.get(id)!;
+
+  const resizeTimeout = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     if (!listRef.current) return;
@@ -231,19 +257,36 @@ export function List({
       oObserver.observe(outerRef.current);
     }
 
+    function onResize() {
+      if (resizeTimeout.current) {
+        clearTimeout(resizeTimeout.current);
+      }
+      resizeTimeout.current = window.setTimeout(() => {
+        if (outerRef.current != null) {
+          fixScroll(state, outerRef.current!);
+        }
+      }, 100);
+    }
+
+    window.addEventListener("resize", onResize);
+
     return () => {
       mObserver.disconnect();
       rObserver.disconnect();
       oObserver?.disconnect();
+      window.removeEventListener("resize", onResize);
     };
   }, [listRef, outerRef]);
 
   useEffect(() => {
-    //console.log("SYNC ANCHOR", anchor);
+    if (state.scrollAnchor == anchor) return;
     state.scrollAnchor = anchor;
     state.scrollAtBottom = data[data.length - 1] == anchor;
     state.anchorOffset = -1;
-    //console.log("ANCHOR CHANGED", anchor);
+    state.scrollAnchorForced = true;
+    console.log("ANCHOR CHANGED", anchor);
+    console.log("FIX SCROLL, ANCHOR CHANGED");
+    fixScroll(state, outerRef.current!);
   }, [anchor]);
 
   const entryList = useMemo(
@@ -259,34 +302,54 @@ export function List({
     [data]
   );
 
+  function handleOnScroll() {
+    if (!outerRef.current) return;
+
+    if (onScroll) {
+      onScroll(outerRef.current.scrollTop);
+    }
+
+    const isUncaughtMutation =
+      outerRef.current.scrollHeight != state.lastScrollHeight ||
+      outerRef.current.clientHeight != state.lastOuterHeight;
+
+    if (isUncaughtMutation) {
+      scrollMutation(state);
+      outerMutation(state, outerRef.current);
+    }
+
+    if (state.scrollPositionsStale) {
+      updateScrollPositions(state, data);
+      state.scrollPositionsStale = false;
+    }
+    const isUserScroll =
+      Date.now() - state.lastMutation > 50 && !isUncaughtMutation;
+
+    if (isUserScroll) {
+      console.log("USER SCROLL");
+      repositionScrollAnchor(state, outerRef.current);
+    } else {
+      console.log("FIX SCROLL, NON USER SCROLL MUTATION");
+      fixScroll(state, outerRef.current);
+    }
+
+    resyncScrollAnchors(
+      state,
+      outerRef,
+      data,
+      anchor,
+      setAnchor,
+      !isUserScroll
+    );
+  }
+
   return (
     <div
       id={id}
       className={`${className} ${id}-outer`}
       ref={outerRef}
       onScroll={() => {
-        if (!outerRef.current) return;
-
-        const isUncaughtMutation =
-          outerRef.current.scrollHeight != state.lastScrollHeight;
-
-        if (isUncaughtMutation) {
-          scrollMutation(state);
-        }
-
-        if (state.scrollPositionsStale) {
-          updateScrollPositions(state, data);
-          state.scrollPositionsStale = false;
-        }
-        const isUserScroll =
-          Date.now() - state.lastMutation > 50 && !isUncaughtMutation;
-
-        if (isUserScroll) {
-          console.log("USER SCROLL");
-          repositionScrollAnchor(state, outerRef.current);
-        }
-
-        resyncScrollAnchors(state, outerRef, data, anchor, setAnchor);
+        handleOnScroll();
       }}
     >
       <div className={`${id}-inner`} ref={innerRef}>

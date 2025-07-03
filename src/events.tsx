@@ -26,9 +26,9 @@ export const enum EventType {
   MessageDeleteBulk = 14,
 
   MessageReactionAdd = 15,
-  MessageReactionRemove = 16,
-  MessageReactionRemoveAll = 17,
-  MessageReactionRemoveEmoji = 18,
+  MessageReactionDelete = 16,
+  MessageReactionDeleteAll = 17,
+  MessageReactionDeleteEmoji = 18,
 
   ChannelAdd = 19,
   ChannelUpdate = 20,
@@ -40,7 +40,7 @@ export const enum EventType {
   RoleDelete = 25,
 
   UserAdd = 26,
-  UserRemove = 27,
+  UserDelete = 27,
   UserUpdate = 28,
 
   UserPresence = 29,
@@ -132,6 +132,7 @@ export interface MessagesResponse {
   after: Snowflake;
   limit: number;
   messages: Message[];
+  references?: Message[];
 }
 
 export interface UserListRequest {
@@ -159,6 +160,7 @@ export interface UserListResponse {
 export interface MessageSendRequest {
   channel: Snowflake;
   content: string;
+  reference?: Snowflake;
   attachmentCount: number;
 }
 
@@ -183,10 +185,32 @@ export interface MessageDeleteEvent {
 export interface MessageAddEvent {
   message: Message;
   author: User;
+  reference?: Message;
 }
 
 export interface MessageUpdateEvent {
   message: Message;
+}
+
+export interface ReactionAddEvent {
+  message: Snowflake;
+  user: Snowflake;
+  emoji: Snowflake;
+}
+
+export interface ReactionDeleteEvent {
+  message: Snowflake;
+  user: Snowflake;
+  emoji: Snowflake;
+}
+
+export interface ReactionDeleteAllEvent {
+  message: Snowflake;
+}
+
+export interface ReactionDeleteEmojiEvent {
+  message: Snowflake;
+  emoji: Snowflake;
 }
 
 export interface LoginRequest {

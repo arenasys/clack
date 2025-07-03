@@ -2,6 +2,8 @@ import {
   User,
   Channel,
   Role,
+  Emoji,
+  Reaction,
   Message,
   Snowflake,
   ChannelType,
@@ -34,18 +36,17 @@ import {
 } from "./events";
 
 import { MakeSnowflake } from "./util";
-import { useChatState } from "./state";
 
-const previewURL = (id: Snowflake) =>
-  `http://${window.location.host}/previews/${id}?type=preview`;
-const displayURL = (id: Snowflake) =>
-  `http://${window.location.host}/previews/${id}?type=display`;
-const originalURL = (id: Snowflake, filename: string) =>
-  `http://${window.location.host}/attachments/${id}/${filename}`;
-const proxyURL = (id: Snowflake, url: string) =>
-  `http://${window.location.host}/external/${id}?url=${encodeURIComponent(
-    url
-  )}`;
+const previewURL = (message_id: Snowflake, id: Snowflake) =>
+  `http://${window.location.host}/previews/${message_id}/${id}?type=thumbnail`;
+const displayURL = (message_id: Snowflake, id: Snowflake) =>
+  `http://${window.location.host}/previews/${message_id}/${id}?type=display`;
+const originalURL = (message_id: Snowflake, id: Snowflake, filename: string) =>
+  `http://${window.location.host}/attachments/${message_id}/${id}/${filename}`;
+const proxyURL = (message_id: Snowflake, id: Snowflake, url: string) =>
+  `http://${
+    window.location.host
+  }/external/${message_id}/${id}?url=${encodeURIComponent(url)}`;
 const uploadURL = (slot: Snowflake) =>
   `http://${window.location.host}/upload/${slot}`;
 
@@ -67,6 +68,7 @@ export interface GatewayPendingAttachment {
   spoilered: boolean;
   filename: string;
   type: AttachmentType;
+  mimetype: string;
   blobURL: string;
 }
 
@@ -77,6 +79,7 @@ export class GatewayChannelState {
   editor: string = "";
   attachments: GatewayPendingAttachment[] = [];
   replyingTo: Snowflake | undefined = undefined;
+  jumpedTo: Snowflake | undefined = undefined;
 
   firstMessage?: Snowflake;
   lastMessage?: Snowflake;
@@ -123,9 +126,8 @@ export class GatewayChannelState {
   }
 
   addMessages(msg: MessagesResponse) {
-    const messages = msg.messages
-      .map((m) => m.id)
-      .filter((id) => !this.messages.includes(id));
+    const messages = msg.messages.map((m) => m.id);
+    //.filter((id) => !this.messages.includes(id));
 
     if (this.messages.length > 100) {
       if (msg.after) {
@@ -134,8 +136,23 @@ export class GatewayChannelState {
         this.messages = this.messages.splice(0, 50);
       }
     }
-
-    if (msg.after) {
+    if (msg.before && msg.after) {
+      this.messages = [...messages];
+      if (
+        this.anchor?.startsWith("skeleton-") ||
+        !(this.anchor ?? "" in this.messages)
+      ) {
+        this.anchor = msg.after;
+      }
+      var i = messages.indexOf(msg.before);
+      console.log(messages.length, i, msg.limit);
+      if (i != msg.limit + 1) {
+        this.firstMessage = messages[0];
+      }
+      if (messages.length - i < msg.limit) {
+        this.lastMessage = messages[messages.length - 1];
+      }
+    } else if (msg.after) {
       if (messages.length === 0) {
         this.lastMessage = msg.after;
       } else {
@@ -205,6 +222,13 @@ export class GatewayChannelState {
 
   addPendingMessage(marker: Snowflake) {
     this.pendingMessages.push(marker);
+  }
+
+  clear() {
+    this.messages = [];
+    this.anchor = undefined;
+    this.firstMessage = undefined;
+    this.lastMessage = undefined;
   }
 
   constructor() {}
@@ -372,6 +396,8 @@ export class Gateway {
   currentEditor: string = "";
   currentFiles: GatewayPendingAttachment[] = [];
   currentReplyingTo: Snowflake | undefined = undefined;
+  currentJumpedTo: Snowflake | undefined = undefined;
+  currentJumpToPresent: boolean = false;
 
   pendingMessages: Map<Snowflake, PendingMessage> = new Map();
 
@@ -564,6 +590,9 @@ export class Gateway {
     this.currentEditor = state.editor;
     this.currentFiles = state.attachments;
     this.currentReplyingTo = state.replyingTo;
+    this.currentJumpedTo = state.jumpedTo;
+    this.currentJumpToPresent =
+      state.lastMessage != state.messages[state.messages.length - 1];
   }
 
   setChatScroll(top: Snowflake, center: Snowflake, bottom: Snowflake) {
@@ -623,6 +652,55 @@ export class Gateway {
     }
 
     return this.channelStates.get(this.currentChannel)!.anchor;
+  }
+
+  jumpToMessage(message: Snowflake | string | undefined) {
+    if (this.currentChannel == undefined) return;
+
+    const state = this.channelStates.get(this.currentChannel);
+    if (state == undefined) return;
+
+    if (message === undefined) {
+      if (state.jumpedTo === undefined) return;
+      state.jumpedTo = undefined;
+      this.syncCurrent(state);
+      return;
+    }
+
+    if (message === "bottom") {
+      state.clear();
+      state.fetching = true;
+      this.requests.push({
+        type: EventType.MessagesRequest,
+        data: {
+          channel: this.currentChannel,
+          limit: 50,
+        },
+      });
+      this.syncCurrent(state);
+      return;
+    }
+
+    state.anchor = message;
+    state.jumpedTo = message;
+    if (!state.messages.includes(message)) {
+      state.messages = [];
+      if (this.messages.has(message)) {
+        state.messages.push(message);
+      }
+      state.fetching = true;
+      this.requests.push({
+        type: EventType.MessagesRequest,
+        data: {
+          before: message,
+          after: message,
+          channel: this.currentChannel,
+          limit: 50,
+        },
+      });
+    }
+
+    this.syncCurrent(state);
   }
 
   setUserScroll(
@@ -743,9 +821,13 @@ export class Gateway {
     var attachments = state.attachments;
     state.attachments = [];
 
+    var reference = state.replyingTo;
+    state.replyingTo = undefined;
+
     var request: MessageSendRequest = {
       channel: this.currentChannel,
       content: content,
+      reference: reference,
       attachmentCount: attachments.length,
     };
 
@@ -868,6 +950,50 @@ export class Gateway {
     });
   }
 
+  addReaction(message: Snowflake, emoji: Snowflake) {
+    if (!this.messages.has(message)) return;
+
+    if (this.messages.get(message)!.reactions === undefined) {
+      this.messages.get(message)!.reactions = [];
+    }
+    var reactions = this.messages.get(message)!.reactions!;
+    var emojiReaction = reactions.find((r) => r.emoji === emoji);
+    if (emojiReaction) {
+      if (emojiReaction.me === true) return;
+      emojiReaction.me = true;
+      emojiReaction.count++;
+      if (emojiReaction.users.length < 5) {
+        emojiReaction.users.push(this.currentUser!);
+      }
+    } else {
+      emojiReaction = {
+        emoji: emoji,
+        users: [this.currentUser!],
+        count: 1,
+        me: true,
+      };
+      reactions.push(emojiReaction);
+    }
+
+    this.requests.push({
+      type: EventType.MessageReactionAdd,
+      data: {
+        message: message,
+        emoji: emoji,
+      },
+    });
+  }
+
+  deleteReaction(message: Snowflake, emoji: string) {
+    this.requests.push({
+      type: EventType.MessageReactionDelete,
+      data: {
+        message: message,
+        emoji: emoji,
+      },
+    });
+  }
+
   onOverview(msg: OverviewResponse) {
     console.log("Overview", msg);
     this.roles.setRoles(msg.roles);
@@ -948,10 +1074,10 @@ export class Gateway {
 
       for (const a of m.attachments ?? []) {
         if (a.type !== AttachmentType.File) {
-          a.previewURL = previewURL(a.id);
-          a.displayURL = displayURL(a.id);
+          a.previewURL = previewURL(m.id, a.id);
+          a.displayURL = displayURL(m.id, a.id);
         }
-        a.originalURL = originalURL(a.id, a.filename);
+        a.originalURL = originalURL(m.id, a.id, a.filename);
       }
       for (const e of m.embeds ?? []) {
         var media = [
@@ -964,9 +1090,9 @@ export class Gateway {
         for (var d of media) {
           if (d) {
             d.type = AttachmentType.Image;
-            d.previewURL = previewURL(d.id);
-            d.displayURL = displayURL(d.id);
-            d.proxyURL = proxyURL(e.id, d.url);
+            d.previewURL = previewURL(m.id, d.id);
+            d.displayURL = displayURL(m.id, d.id);
+            d.proxyURL = proxyURL(m.id, e.id, d.url);
             d.originalURL = d.url;
           }
         }
@@ -974,6 +1100,11 @@ export class Gateway {
           e.video.type = AttachmentType.Video;
         }
       }
+      for (const r of m.reactions ?? []) {
+        r.me = r.users.includes(this.currentUser ?? "");
+      }
+
+      this.messages.set(m.id, m);
     }
   }
 
@@ -997,18 +1128,20 @@ export class Gateway {
   }
 
   onMessages(msg: MessagesResponse) {
-    this.processMessages(msg.messages);
+    var messages = [...msg.messages, ...(msg.references ?? [])];
+
+    this.processMessages(messages);
 
     var unknownUsers: Snowflake[] = [];
 
-    msg.messages.forEach((message) => {
-      this.messages.set(message.id, message);
+    messages.forEach((message) => {
       if (!this.users.has(message.author)) {
         unknownUsers.push(message.author);
       }
     });
 
     if (unknownUsers.length > 0) {
+      console.log("USERS REQUEST", unknownUsers.length);
       this.requests.push({
         type: EventType.UsersRequest,
         data: {
@@ -1035,9 +1168,11 @@ export class Gateway {
     console.log("MessageAdd", msg);
 
     this.processMessages([msg.message]);
-    this.processUsers([msg.author]);
+    if (msg.reference) {
+      this.processMessages([msg.reference]);
+    }
 
-    this.messages.set(msg.message.id, msg.message);
+    this.processUsers([msg.author]);
 
     const state = this.channelStates.get(msg.message.channel);
     if (state == undefined) {
@@ -1098,6 +1233,7 @@ export class Gateway {
   }
 
   onUsers(msg: UsersResponse) {
+    console.log("USERS RESPONSE", Date.now(), msg.users);
     this.processUsers(msg.users);
   }
 
