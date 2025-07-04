@@ -64,7 +64,6 @@ export function Message({
   standalone?: boolean;
 }) {
   const message = useClackStateDynamic((state, events) => {
-    events.push(ClackEvents.current);
     events.push(ClackEvents.message(id));
 
     const m = state.chat.messages.get(id);
