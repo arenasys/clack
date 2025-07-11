@@ -93,6 +93,18 @@ export function isInsideSelection(e: {
   return isInsideRect(e.clientX, e.clientY, rect);
 }
 
+export function isElementEditable(element: EventTarget | null): boolean {
+  if (element == null) return false;
+  if ((element as any).isContentEditable) return true;
+  if (
+    element instanceof HTMLInputElement ||
+    element instanceof HTMLTextAreaElement ||
+    element instanceof HTMLSelectElement
+  )
+    return true;
+  return false;
+}
+
 export function FormatDateTime(date: Date) {
   if (isToday(date)) {
     return `Today at ${format(date, "h:mm a")}`;

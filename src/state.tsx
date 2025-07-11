@@ -1,5 +1,6 @@
 // @refresh reset
 import { useState, useEffect, useMemo, useRef } from "react";
+import { dequal } from "dequal";
 
 import { ChatState } from "./state/chat";
 import { GUIState } from "./state/gui";
@@ -30,6 +31,7 @@ export class ClackEventsClass {
   public captcha = `captcha` as const;
   public auth = `auth` as const;
   public current = `current` as const;
+  public anchor = `anchor` as const;
   public requests = `requests` as const;
   public attachmentModal = `attachmentModal` as const;
   public deleteMessageModal = `deleteMessageModal` as const;
@@ -39,6 +41,7 @@ export class ClackEventsClass {
   public emojiPickerPopup = `emojiPickerPopup` as const;
   public tooltipPopup = `tooltipPopup` as const;
   public userPopup = `userPopup` as const;
+  public editorFocus = `editorFocus` as const;
 }
 
 export const ClackEvents = new ClackEventsClass();
@@ -77,6 +80,16 @@ export function useClackStateDynamic<T>(
 }
 
 export function updateClackState(event: string): void {
-  console.log("EMIT", event);
+  //console.log("EMIT", event);
   clackEventBus.emit(event);
+}
+
+export function updateClackStateConditional(
+  event: string,
+  oldValue: any,
+  newValue: any
+): void {
+  if (!dequal(oldValue, newValue)) {
+    updateClackState(event);
+  }
 }

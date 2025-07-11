@@ -288,3 +288,36 @@ export const Modal = forwardRef<ModalHandle, ModalProps>(
     );
   }
 );
+
+export function fadeMedia(media: HTMLMediaElement | null) {
+  if (!media || media.paused) return;
+
+  let step = media.volume / 10;
+
+  let fade = setInterval(() => {
+    if (media.volume > step) {
+      media.volume = Math.max(media.volume - step, 0);
+    } else {
+      media.volume = 0;
+      media.pause();
+      clearInterval(fade);
+    }
+  }, 25);
+}
+
+export function fadeAllMedia() {
+  const videos = document.querySelectorAll("video");
+  const audios = document.querySelectorAll("audio");
+
+  videos.forEach((video) => {
+    if (video instanceof HTMLVideoElement) {
+      fadeMedia(video);
+    }
+  });
+
+  audios.forEach((audio) => {
+    if (audio instanceof HTMLAudioElement) {
+      fadeMedia(audio);
+    }
+  });
+}

@@ -13,6 +13,10 @@ export default function LoadingScreen() {
   });
   const [showing, setShowing] = useState(true);
 
+  /*useEffect(() => {
+    document.getElementById("root-spinner")?.remove();
+  }, []);*/
+
   useEffect(() => {
     if (!isLoading) {
       setTimeout(() => {

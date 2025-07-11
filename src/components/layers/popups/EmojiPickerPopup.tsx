@@ -1,5 +1,13 @@
 // @refresh reset
-import { useEffect, useState, useRef, useMemo, memo } from "react";
+import {
+  useEffect,
+  useState,
+  useRef,
+  useCallback,
+  useMemo,
+  memo,
+  useLayoutEffect,
+} from "react";
 
 import { VList, VListHandle } from "virtua";
 
@@ -35,7 +43,7 @@ import {
   EmojiToCodePoint,
   EmojiLookupName,
   EmojiCountryByFlag,
-} from "../../../emoji.tsx";
+} from "../../../emoji";
 
 function CategoryIcon({
   category,
@@ -106,10 +114,15 @@ class EmojiPickerState {
   selectedEvent = "selected" as const;
   multiToneSelectedEvent = "multitone" as const;
 
+  constructor() {}
+
   setSearch(search: string) {
     if (this.search === search) return;
-    this.searchResults = [];
     this.search = search;
+    this.bus.emit(this.searchEvent);
+
+    const start = performance.now();
+    this.searchResults = [];
 
     if (this.search == undefined) return;
 
@@ -143,8 +156,6 @@ class EmojiPickerState {
     this.setSelectedEmoji(selectedEmoji);
 
     pickerState.setSelectedCategory(this.search == "" ? "people" : "");
-
-    this.bus.emit(this.searchEvent);
   }
 
   setSelectedTone(tone: number) {
@@ -220,6 +231,7 @@ class EmojiPickerState {
     // Full reset
     pickerState.setSearch("");
     pickerState.setSelectedTone(0);
+    pickerState.setSelectedCategory("people");
   }
 }
 
@@ -262,7 +274,7 @@ function getEmojiIndex(emoji: EmojiEntry): [number, number] {
   return [-1, -1];
 }
 
-function EmojiPickerEntry({
+function EmojiPickerEntryInternal({
   emoji,
   onSelect,
   onClick,
@@ -273,25 +285,27 @@ function EmojiPickerEntry({
   onClick: (emoji: EmojiEntry) => void;
   onMultiTone: (target: EmojiEntry | undefined) => void;
 }) {
-  const ref = useRef<HTMLLIElement>(null);
-
-  useEventBusDynamic(pickerState.bus, (keys) => {
-    keys.push(pickerState.emojiEvent(emoji.symbol));
-    if (emoji.diversityChildren) {
-      for (const child of emoji.diversityChildren) {
-        keys.push(pickerState.emojiEvent(child.symbol));
+  useEventBusDynamic(
+    pickerState.bus,
+    (keys) => {
+      keys.push(pickerState.emojiEvent(emoji.symbol));
+      if (emoji.diversityChildren) {
+        for (const child of emoji.diversityChildren) {
+          keys.push(pickerState.emojiEvent(child.symbol));
+        }
+        keys.push(pickerState.toneEvent);
       }
-      keys.push(pickerState.toneEvent);
-    }
-  });
+    },
+    [emoji]
+  );
 
   const selectedClass = getEmojiSelection(emoji);
 
   const shown = getEmoji(emoji, pickerState.selectedTone);
 
   return (
-    <li ref={ref} id={`emoji-picker-entry-${emoji.symbol}`}>
-      <button
+    <li id={`emoji-picker-entry-${emoji.symbol}`}>
+      <div
         className={`emoji-picker-entry ${selectedClass}`}
         onMouseMove={() => onSelect(shown)}
         onClick={() => {
@@ -309,30 +323,36 @@ function EmojiPickerEntry({
           onMultiTone(target);
         }}
       >
-        <EmojiPNG symbol={shown.symbol} />
-      </button>
+        <EmojiPNG symbol={shown.symbol} size={40} />
+      </div>
     </li>
   );
 }
 
-function EmojiPickerRowInternal({
+const EmojiPickerEntry = memo(
+  EmojiPickerEntryInternal,
+  (prevProps, nextProps) => {
+    return prevProps.emoji.symbol === nextProps.emoji.symbol;
+  }
+);
+
+function EmojiPickerRow({
   rowIndex,
-  rowItems,
   onClick,
   onSelect,
   onMultiTone,
 }: {
   rowIndex: number;
-  rowItems: EmojiEntry[];
   onClick: (e: EmojiEntry) => void;
   onSelect: (e: EmojiEntry) => void;
   onMultiTone: (target: EmojiEntry | undefined) => void;
 }) {
+  const rowItems = pickerState.searchResults[rowIndex] as EmojiEntry[];
   return (
     <ul className={`emoji-picker-row ${rowIndex === 0 ? "first" : ""}`}>
-      {rowItems.map((emoji, _) => (
+      {rowItems.map((emoji, i) => (
         <EmojiPickerEntry
-          key={emoji.symbol}
+          key={i}
           emoji={emoji}
           onClick={onClick}
           onSelect={onSelect}
@@ -342,16 +362,6 @@ function EmojiPickerRowInternal({
     </ul>
   );
 }
-
-const EmojiPickerRow = memo(EmojiPickerRowInternal, (prevProps, nextProps) => {
-  return (
-    prevProps.rowIndex === nextProps.rowIndex &&
-    prevProps.rowItems.length === nextProps.rowItems.length &&
-    prevProps.rowItems.every(
-      (item, index) => item.symbol === nextProps.rowItems[index].symbol
-    )
-  );
-});
 
 function EmojiPickerBody({
   listRef,
@@ -397,7 +407,6 @@ function EmojiPickerBody({
             return (
               <EmojiPickerRow
                 rowIndex={index}
-                rowItems={row}
                 onClick={onClick}
                 onSelect={onSelect}
                 onMultiTone={onMultiTone}
@@ -464,7 +473,7 @@ function EmojiPickerMultitoneList({
               pickEmoji(childEmoji);
             }}
           >
-            <EmojiPNG symbol={childEmoji.symbol} />
+            <EmojiPNG symbol={childEmoji.symbol} size={40} />
           </button>
         ))}
     </div>
@@ -578,7 +587,7 @@ function EmojiPickerCategoryList({
 function EmojiPickerSearch({
   searchRef,
 }: {
-  searchRef: React.RefObject<HTMLInputElement>;
+  searchRef: React.Ref<HTMLInputElement>;
 }) {
   useEventBus(pickerState.bus, pickerState.searchEvent, () => {});
   return (
@@ -600,10 +609,16 @@ function EmojiPickerSearch({
 
 export default function EmojiPickerPopup() {
   const listRef = useRef<VListHandle>(null);
-
   const toneListRef = useRef<HTMLDivElement>(null);
   const multiToneListRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+
+  const handleSearchRef = useCallback((el: HTMLInputElement | null) => {
+    searchRef.current = el;
+    if (el) {
+      el.focus();
+    }
+  }, []);
 
   const emojiPickerPopup = useClackState(
     ClackEvents.emojiPickerPopup,
@@ -805,42 +820,42 @@ export default function EmojiPickerPopup() {
     };
   }, [toneListRef, multiToneListRef]);
 
-  const content = useMemo(() => {
-    if (emojiPickerPopup === undefined) {
-      return <></>;
-    } else {
-      pickerState.clear();
-      var flip = false;
-      if (
-        emojiPickerPopup.direction == "bottom" &&
-        emojiPickerPopup.position.y < 508
-      ) {
-        flip = true;
-      }
-      return (
-        <ClickWrapper
-          passthrough={false}
-          onClick={() => {
-            setEmojiPickerPopup(undefined);
-          }}
-        >
-          <div className="layer-container layer-popup">
-            <div
-              className={
-                "emoji-picker-popup emoji-picker-popup-" +
-                emojiPickerPopup.direction +
-                (flip ? " flip" : "")
-              }
-              style={{
-                bottom: emojiPickerPopup.position.y,
-                right: emojiPickerPopup.position.x,
-              }}
-            >
-              <div className="emoji-picker-header">
-                <EmojiPickerSearch searchRef={searchRef} />
-                <EmojiPickerToneList listRef={toneListRef} />
-              </div>
-              <EmojiPickerCategoryList listRef={listRef} />
+  if (emojiPickerPopup === undefined) {
+    return <></>;
+  } else {
+    pickerState.clear();
+    var flip = false;
+    if (
+      emojiPickerPopup.direction == "bottom" &&
+      emojiPickerPopup.position.y < 508
+    ) {
+      flip = true;
+    }
+    return (
+      <ClickWrapper
+        passthrough={false}
+        onClick={() => {
+          setEmojiPickerPopup(undefined);
+        }}
+      >
+        <div className="layer-container layer-popup">
+          <div
+            className={
+              "emoji-picker-popup emoji-picker-popup-" +
+              emojiPickerPopup.direction +
+              (flip ? " flip" : "")
+            }
+            style={{
+              bottom: emojiPickerPopup.position.y,
+              right: emojiPickerPopup.position.x,
+            }}
+          >
+            <div className="emoji-picker-header">
+              <EmojiPickerSearch searchRef={handleSearchRef} />
+              <EmojiPickerToneList listRef={toneListRef} />
+            </div>
+            <EmojiPickerCategoryList listRef={listRef} />
+            {
               <EmojiPickerBody
                 listRef={listRef}
                 onScroll={() => {
@@ -853,11 +868,6 @@ export default function EmojiPickerPopup() {
                   }
                 }}
                 onClick={(emoji) => {
-                  console.log(
-                    "Picking emoji",
-                    emoji,
-                    pickerState.wasListJustClosed
-                  );
                   if (pickerState.wasListJustClosed) {
                     pickerState.wasListJustClosed = false;
                     return;
@@ -868,17 +878,15 @@ export default function EmojiPickerPopup() {
                   pickerState.setMultiToneTarget(target);
                 }}
               />
-              <EmojiPickerFooter />
-              <EmojiPickerMultitoneList
-                listRef={multiToneListRef}
-                pickEmoji={pickEmoji}
-              />
-            </div>
+            }
+            <EmojiPickerFooter />
+            <EmojiPickerMultitoneList
+              listRef={multiToneListRef}
+              pickEmoji={pickEmoji}
+            />
           </div>
-        </ClickWrapper>
-      );
-    }
-  }, [emojiPickerPopup]);
-
-  return content;
+        </div>
+      </ClickWrapper>
+    );
+  }
 }

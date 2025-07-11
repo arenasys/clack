@@ -20,11 +20,13 @@ import {
 
 import { EmojiInline } from "../emoji";
 
-import { VideoDisplay, ImageDisplay } from "./Media";
+import { VideoDisplay, ImageDisplay, AnimatedImageDisplay } from "./Media";
 
 import { RiReplyFill, RiEmotionFill, RiMoreFill } from "react-icons/ri";
 import { IoClose } from "react-icons/io5";
 import { IoMdCreate, IoMdDownload } from "react-icons/io";
+import { MdPhoto } from "react-icons/md";
+import { FaImage } from "react-icons/fa6";
 
 import {
   FormatDateTime,
@@ -44,6 +46,8 @@ import { FaFile, FaFileUpload, FaTimes } from "react-icons/fa";
 
 import Rand from "rand-seed";
 import { IconButton, TooltipWrapper } from "./Common";
+import { MessageContextMenuState } from "../state/gui";
+import { set } from "date-fns";
 
 export function MessageEntry({ id }: { id: string }) {
   const content = useMemo(() => {
@@ -109,7 +113,7 @@ export function Message({
   const [isEditing, setIsEditing] = useState(false);
   const editedValue = useRef<string | undefined>();
   const updateMessage = getClackState((state) => state.chat.updateMessage);
-  const addReaction = getClackState((state) => state.chat.addReaction);
+  const toggleReaction = getClackState((state) => state.chat.toggleReaction);
   const [isFlashing, setIsFlashing] = useState(false);
   const flashingTimeout = useRef<number | null>(null);
   const [isPickingEmoji, setIsPickingEmoji] = useState(false);
@@ -130,12 +134,37 @@ export function Message({
   const setReplyingTo = getClackState((state) => state.chat.setReplyingTo);
   const jumpToMessage = getClackState((state) => state.chat.jumpToMessage);
 
-  const contextMenu = useClackState(
-    ClackEvents.contextMenu(id),
-    (state) => state.gui.contextMenuPopup
-  );
+  const [actionBarContextMenu, setActionBarContextMenu] = useState<
+    MessageContextMenuState | undefined
+  >(undefined);
+  const [mouseContextMenu, setMouseContextMenu] = useState<
+    MessageContextMenuState | undefined
+  >(undefined);
 
-  const hasContextMenu = contextMenu?.message == id;
+  const ownsContextMenu = actionBarContextMenu || mouseContextMenu;
+
+  function hasContextMenu() {
+    return getClackState((state) => {
+      return state.gui.contextMenuPopup !== undefined;
+    });
+  }
+
+  function clearContextMenu() {
+    setContextMenuPopup(undefined);
+  }
+
+  useClackState(ClackEvents.contextMenu(id), (state) => {
+    const current = state.gui.contextMenuPopup;
+    if (!current || current.message != id) {
+      if (actionBarContextMenu) {
+        setActionBarContextMenu(undefined);
+      }
+      if (mouseContextMenu) {
+        setMouseContextMenu(undefined);
+      }
+    }
+  });
+
   const hasReference = message?.reference !== undefined;
   const hasUser = message?.user !== undefined;
   const isCombined =
@@ -192,12 +221,11 @@ export function Message({
     );
   }, [message?.editedTimestamp, isEditing]);
 
-  const messageReference = useMemo(() => {
-    if (message?.reference) {
-      return <MessageReference id={message.reference} />;
-    }
-    return <></>;
-  }, [message?.reference]);
+  const messageReference = message?.reference ? (
+    <MessageReference id={message.reference} />
+  ) : (
+    <></>
+  );
 
   const permissions = message?.permissions ?? 0;
 
@@ -249,8 +277,8 @@ export function Message({
                 isPickingEmoji ? "active" : ""
               }`}
               onClick={(rect) => {
-                if (hasContextMenu) {
-                  setContextMenuPopup(undefined);
+                if (hasContextMenu()) {
+                  clearContextMenu();
                 }
                 setIsPickingEmoji(true);
                 setEmojiPickerPopup({
@@ -260,10 +288,7 @@ export function Message({
                   },
                   direction: "bottom",
                   onPick: (emojiID: Snowflake, text: string) => {
-                    console.log(
-                      `Adding reaction ${text} (${emojiID}) to message ${id}`
-                    );
-                    addReaction(id, emojiID);
+                    toggleReaction(id, emojiID);
                   },
                   onClose: () => {
                     setIsPickingEmoji(false);
@@ -279,21 +304,23 @@ export function Message({
             tooltip="More"
             tooltipDirection="top"
             className={`message-actions-button row ${
-              hasContextMenu && contextMenu.static ? "active" : ""
+              actionBarContextMenu != undefined ? "active" : ""
             }`}
             onClick={(rect) => {
-              if (hasContextMenu) {
-                setContextMenuPopup(undefined);
+              if (hasContextMenu()) {
+                clearContextMenu();
               } else {
-                setContextMenuPopup({
+                const contextMenu = {
                   message: id,
-                  direction: "right",
                   position: {
-                    x: rect.right + 8,
-                    y: rect.top - 2,
+                    x: (rect.left + rect.right) / 2,
+                    y: (rect.top + rect.bottom) / 2,
                   },
+                  offset: { x: 16 + 8, y: -16 },
                   static: true,
-                });
+                };
+                setActionBarContextMenu(contextMenu);
+                setContextMenuPopup(contextMenu);
               }
             }}
           >
@@ -392,7 +419,7 @@ export function Message({
     "message-entry" +
     (isCombined ? " combined" : "") +
     (message?.pending ? " pending" : "") +
-    (hasContextMenu || isPickingEmoji ? " active" : "") +
+    (ownsContextMenu || isPickingEmoji ? " active" : "") +
     (isReplying ? " replying" : "") +
     (isEditing ? " editing" : "");
 
@@ -461,8 +488,8 @@ export function Message({
   const hasAttachments = attachedMedia.length > 0 || attachedFiles.length > 0;
   const hasEmbeds = message.embeds ? true : false;
   const hasUploading = message.uploading;
-  const hasReactions = message.reactions?.length ?? 0 > 0;
-  const isEmbedding = message.embeddableURLs?.length ?? 0 > 0;
+  const hasReactions = (message.reactions?.length ?? 0) > 0;
+  const isEmbedding = (message.embeddableURLs?.length ?? 0) > 0;
 
   const hasAccessories =
     hasAttachments || hasEmbeds || hasUploading || isEmbedding || hasReactions;
@@ -472,6 +499,7 @@ export function Message({
       id={id}
       ref={ref}
       className={className}
+      tabIndex={-1}
       onContextMenu={(e) => {
         if (isInsideSelection(e)) {
           return;
@@ -480,16 +508,18 @@ export function Message({
         e.preventDefault();
         e.stopPropagation();
 
-        if (hasContextMenu) {
-          return;
+        if (hasContextMenu()) {
+          clearContextMenu();
+        } else {
+          const contextMenu = {
+            message: id,
+            position: { x: e.clientX, y: e.clientY },
+            offset: { x: 0, y: 0 },
+            static: false,
+          };
+          setMouseContextMenu(contextMenu);
+          setContextMenuPopup(contextMenu);
         }
-
-        setContextMenuPopup({
-          message: id,
-          direction: "right",
-          position: { x: e.clientX, y: e.clientY },
-          static: false,
-        });
       }}
     >
       <div className="message-background flash" data-on={isFlashing} />
@@ -573,6 +603,12 @@ function MessageEditor({
 }) {
   const autocompleteRef = useRef<AutocompleteRef>(null);
   const textboxRef = useRef<MarkdownTextboxRef>(null);
+
+  useEffect(() => {
+    if (textboxRef.current) {
+      textboxRef.current.focus();
+    }
+  }, [textboxRef.current]);
 
   return (
     <>
@@ -851,7 +887,13 @@ function MessageRichEmbed({ embed }: { embed: Embed }) {
             onClick={() => {
               setViewerModal({
                 index: 0,
-                items: [{ ...embed.thumbnail, type: embed.thumbnail.type! }],
+                items: [
+                  {
+                    ...embed.thumbnail,
+                    type: embed.thumbnail.type!,
+                    mimetype: "",
+                  },
+                ],
               });
             }}
           />
@@ -893,7 +935,9 @@ function MessageRichEmbed({ embed }: { embed: Embed }) {
               onClick={() => {
                 setViewerModal({
                   index: 0,
-                  items: [{ ...embed.image, type: embed.image.type! }],
+                  items: [
+                    { ...embed.image, type: embed.image.type!, mimetype: "" },
+                  ],
                 });
               }}
             />
@@ -971,14 +1015,26 @@ function MessageMediaAttachment({
 
   var inner;
   if (attachment.type == AttachmentType.Image) {
-    inner = (
-      <ImageDisplay
-        src={attachment.previewURL!}
-        preload={attachment.preload}
-        onClick={onView}
-      />
-    );
+    if (attachment.mimetype == "image/gif") {
+      inner = (
+        <AnimatedImageDisplay
+          src={attachment.displayURL!}
+          preview={attachment.previewURL!}
+          preload={attachment.preload}
+          onClick={onView}
+        />
+      );
+    } else {
+      inner = (
+        <ImageDisplay
+          src={attachment.previewURL!}
+          preload={attachment.preload}
+          onClick={onView}
+        />
+      );
+    }
   } else if (attachment.type == AttachmentType.Video) {
+    const thumbnail = attachmentIndex != 0 || attachmentCount != 1;
     inner = (
       <VideoDisplay
         src={attachment.originalURL!}
@@ -986,12 +1042,13 @@ function MessageMediaAttachment({
         preload={attachment.preload}
         showCover={true}
         showTimestamps={attachment.width > 0.8 * attachment.height}
+        isThumbnail={thumbnail}
         onClick={() => {
-          if (attachmentIndex == 0 && attachmentCount == 1) {
-            return true;
-          } else {
+          if (thumbnail) {
             onView();
             return false;
+          } else {
+            return true;
           }
         }}
         videoRef={videoRef}
@@ -1062,11 +1119,15 @@ function MessageEditedTimestamp({ timestamp }: { timestamp: number }) {
 }
 
 function MessageReference({ id }: { id: string }) {
-  const message = useClackState(ClackEvents.message(id), (state) => {
+  const message = useClackStateDynamic((state, events) => {
+    events.push(ClackEvents.message(id));
+
     const m = state.chat.messages.get(id);
     if (!m) return undefined;
 
+    events.push(ClackEvents.user(m.author));
     const a = state.chat.users.get(m.author);
+
     return {
       ...m,
       user: a,
@@ -1074,12 +1135,17 @@ function MessageReference({ id }: { id: string }) {
       color: a?.color,
     };
   });
+
   const setUserPopup = getClackState((state) => state.gui.setUserPopup);
   const jumpToMessage = getClackState((state) => state.chat.jumpToMessage);
+
+  const hasEmbeds = message?.embeds?.length > 0;
+  const hasAttachments = message?.attachments?.length > 0;
 
   return (
     <div
       className="message-reference"
+      id={`reference-${id}`}
       onClick={(e) => {
         if (message) {
           jumpToMessage(message.id);
@@ -1089,7 +1155,7 @@ function MessageReference({ id }: { id: string }) {
       <div className="message-reference-decoration">
         <div className="message-reference-pointer" />
       </div>
-      <div className="message-reference-content">
+      <div className="message-reference-container">
         {message ? (
           <>
             <span
@@ -1110,17 +1176,32 @@ function MessageReference({ id }: { id: string }) {
               }}
             >
               <img className="message-reference-avatar" src="/avatar.png" />
-              <span
-                className="message-reference-name clickable-text"
-                style={{ color: FormatColor(message.color) }}
-              >
-                {"@"}
-                {message.name ?? message.id}
-              </span>
+              {message.name ? (
+                <span
+                  className="message-reference-name clickable-text"
+                  style={{ color: FormatColor(message.color) }}
+                >
+                  {"@"}
+                  {message.name}
+                </span>
+              ) : (
+                <span
+                  className="message-name skeleton"
+                  style={{ width: Roll(75, 125) }}
+                />
+              )}
             </span>{" "}
-            <span className="message-reference-content">
+            <span className="message-reference-content" key={message.content}>
               <SyntaxContent text={message.content} inline />
+              {message.content == "" && hasAttachments && (
+                <span className="empty">Click to see attachment</span>
+              )}
             </span>
+            {(hasAttachments || hasEmbeds) && (
+              <span className="message-reference-media-icon">
+                <FaImage />
+              </span>
+            )}
           </>
         ) : (
           <>
@@ -1141,6 +1222,11 @@ function MessageReactions({ id }: { id: string }) {
   const reactions = useClackState(ClackEvents.message(id), (state) => {
     return state.chat.messages.get(id)?.reactions ?? [];
   });
+  const toggleReaction = getClackState((state) => state.chat.toggleReaction);
+
+  if (reactions.length == 0) {
+    return <></>;
+  }
 
   return (
     <div className="message-reactions">
@@ -1149,6 +1235,9 @@ function MessageReactions({ id }: { id: string }) {
           <div
             key={`${id}-reaction-${index}`}
             className={`message-reaction ${react.me ? "you" : ""}`}
+            onClick={() => {
+              toggleReaction(id, react.emoji);
+            }}
           >
             <EmojiInline text={react.emoji} />
             <span className="message-reaction-count">{react.count}</span>

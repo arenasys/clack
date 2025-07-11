@@ -44,7 +44,7 @@ export type SyntaxRule = {
     params,
   }: {
     children: JSX.Element;
-    params: { [key: string]: string };
+    params: { [key: string]: any };
   }) => JSX.Element;
 };
 
@@ -138,9 +138,14 @@ function codeBlockRanges(
 
   var language = "";
   var lines = content;
+  var neededTrim = false;
   if (content.includes("\n")) {
     language = content.split("\n")[0] + "\n";
     lines = content.slice(language.length);
+  }
+  if (lines.endsWith("\n")) {
+    lines = lines.slice(0, -1);
+    neededTrim = true;
   }
 
   const validLanguage =
@@ -197,6 +202,9 @@ function codeBlockRanges(
     });
   }
   offset += lines.length;
+  if (neededTrim) {
+    offset += 1;
+  }
 
   if (end.length !== 0) {
     ranges.push({
@@ -221,18 +229,33 @@ export const codeBlockRule: SyntaxRule = {
   html: ({ children, params }) => {
     const ref = useRef<HTMLElement>(null);
 
+    var lang: string = params.language ? params.language.trim() : "";
+    var inline: boolean = params.inline;
+
     useEffect(() => {
-      if (ref.current && params.language) {
-        const lang = params.language.trim();
+      if (
+        ref.current &&
+        lang &&
+        !ref.current.getAttribute("data-highlighted")
+      ) {
         if (hljs.getLanguage(lang)) {
+          console.log("HIGHLIGHT", ref.current, lang);
           hljs.highlightElement(ref.current);
         }
       }
     }, [ref.current]);
 
+    if (inline) {
+      return (
+        <code ref={ref} className={`inline ${lang}`}>
+          {children}
+        </code>
+      );
+    }
+
     return (
       <pre>
-        <code ref={ref} className={`${params.language ?? ""}`}>
+        <code ref={ref} className={lang}>
           {children}
         </code>
       </pre>
@@ -805,7 +828,10 @@ export function SyntaxContent({
           continue;
         }
         element = (
-          <rule.html params={{ language: lang }} key={`range-${i++}`}>
+          <rule.html
+            params={{ language: lang, inline: inline }}
+            key={`range-${i++}`}
+          >
             {element}
           </rule.html>
         );

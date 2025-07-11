@@ -112,6 +112,7 @@ export interface Viewable {
   height: number;
 
   preload: string;
+  mimetype: string;
 
   // Client
   previewURL?: string;

@@ -43,8 +43,8 @@ export interface AttachmentModalState {
 
 export interface MessageContextMenuState {
   message: Snowflake;
-  direction: "right";
   position: { x: number; y: number };
+  offset: { x: number; y: number };
   static: boolean;
 }
 
@@ -106,6 +106,7 @@ export class GUIState {
   };
 
   public setContextMenuPopup = (popup?: MessageContextMenuState) => {
+    console.log("Setting context menu popup", popup);
     var oldPopupMessage = this.contextMenuPopup?.message;
     this.contextMenuPopup = popup;
     updateClackState(ClackEvents.contextMenuPopup);
@@ -145,5 +146,14 @@ export class GUIState {
   public setShowingUserList = (show: boolean) => {
     this.showingUserList = show;
     updateClackState(ClackEvents.userList);
+  };
+
+  public hasModal = () => {
+    return (
+      this.viewerModal !== undefined ||
+      this.attachmentModal !== undefined ||
+      this.messageDeleteModal !== undefined ||
+      this.errorModal !== undefined
+    );
   };
 }

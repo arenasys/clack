@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   PiPlayFill,
   PiPauseFill,
@@ -12,6 +12,7 @@ import { MdVolumeUp, MdVolumeDown, MdVolumeOff } from "react-icons/md";
 import { useClackState, getClackState, ClackEvents } from "../state";
 
 import { Viewable } from "../types";
+import { fadeAllMedia } from "./Common";
 
 function formatSeconds(seconds: number): string {
   const minutes = Math.floor(seconds / 60);
@@ -28,6 +29,7 @@ export function VideoDisplay({
   preload,
   showTimestamps,
   showCover,
+  isThumbnail,
   onClick,
   videoRef,
 }: {
@@ -36,9 +38,13 @@ export function VideoDisplay({
   preload: string;
   showTimestamps: boolean;
   showCover: boolean;
+  isThumbnail?: boolean;
   onClick: () => boolean;
-  videoRef: React.RefObject<HTMLVideoElement>;
+  videoRef?: React.RefObject<HTMLVideoElement>;
 }) {
+  const fallbackRef = useRef<HTMLVideoElement>(null);
+  const ref = videoRef ?? fallbackRef;
+
   const [isLoaded, setIsLoaded] = useState(false);
   const [isShowing, setIsShowing] = useState(!showCover);
   const [isShowingOverlay, setIsShowingOverlay] = useState(false);
@@ -71,14 +77,32 @@ export function VideoDisplay({
 
   const setTooltipPopup = getClackState((state) => state.gui.setTooltipPopup);
 
+  function doPlay() {
+    if (!ref.current) return;
+    ref.current.volume = volume;
+    if (ref.current.paused) {
+      fadeAllMedia();
+      ref.current.play();
+    }
+  }
+
+  function doToggle() {
+    if (!ref.current) return;
+    if (ref.current.paused) {
+      doPlay();
+    } else {
+      ref.current.pause();
+    }
+  }
+
   function doSeek(e: MouseEvent, force: boolean = false) {
-    if (!videoRef.current || !seekBarRef.current) return;
+    if (!ref.current || !seekBarRef.current) return;
 
     const rect = seekBarRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const percentage = Math.max(0, Math.min(1, x / rect.width));
 
-    const newTime = percentage * videoRef.current.duration;
+    const newTime = percentage * ref.current.duration;
 
     if (seekTimeout.current) {
       window.clearTimeout(seekTimeout.current);
@@ -97,12 +121,12 @@ export function VideoDisplay({
 
     if (force) {
       setTime(newTime);
-      videoRef.current!.currentTime = newTime;
+      ref.current!.currentTime = newTime;
     } else {
       seekTimeout.current = window.setTimeout(() => {
         seekTimeout.current = null;
         setTime(newTime);
-        videoRef.current!.currentTime = newTime;
+        ref.current!.currentTime = newTime;
       }, 50);
     }
 
@@ -111,8 +135,8 @@ export function VideoDisplay({
   }
 
   function doBuffers() {
-    if (!videoRef.current) return;
-    const video = videoRef.current;
+    if (!ref.current) return;
+    const video = ref.current;
     var buffers = [];
     for (var i = 0; i < video.buffered.length; i++) {
       buffers.push({
@@ -124,12 +148,13 @@ export function VideoDisplay({
   }
 
   function doVolume(e: MouseEvent) {
-    if (!videoRef.current || !volumeBarRef.current) return;
+    if (!ref.current || !volumeBarRef.current) return;
 
     const rect = volumeBarRef.current.getBoundingClientRect();
     const y = rect.bottom - e.clientY;
     const percentage = Math.max(0, Math.min(1, y / rect.height));
-    videoRef.current.volume = percentage;
+    setVolume(percentage);
+    ref.current.volume = percentage;
     globalVolume = percentage;
   }
 
@@ -164,9 +189,9 @@ export function VideoDisplay({
     doSeek(e, true);
     setIsSeeking(false);
     if (seekWasPlaying.current) {
-      if (!videoRef.current!.ended) {
+      if (!ref.current!.ended) {
         console.log("MOUSE UP PLAY");
-        videoRef.current!.play();
+        doPlay();
       }
     }
     document.removeEventListener("mousemove", doSeek);
@@ -176,9 +201,9 @@ export function VideoDisplay({
   const onSeekMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     e.preventDefault();
 
-    seekWasPlaying.current = !videoRef.current!.paused;
+    seekWasPlaying.current = !ref.current!.paused;
     if (seekWasPlaying.current) {
-      videoRef.current!.pause();
+      ref.current!.pause();
     }
 
     setIsSeeking(true);
@@ -208,25 +233,49 @@ export function VideoDisplay({
     setIsFullscreen(document.fullscreenElement == containerRef.current);
   };
 
-  const onKeydown = (e: KeyboardEvent) => {
-    if (!isFullscreen) return;
+  const doOnKeyDown = (e: KeyboardEvent) => {
+    if (isThumbnail) return;
+
+    console.log("KEY DOWN", e.key);
+
     if (e.key == "Escape") {
-      document.exitFullscreen();
-      e.stopImmediatePropagation();
+      if (isFullscreen) {
+        document.exitFullscreen();
+      } else {
+        containerRef.current?.blur();
+      }
+      e.preventDefault();
     }
     if (e.key == " ") {
-      if (videoRef.current?.paused) {
-        videoRef.current?.play();
-      } else {
-        videoRef.current?.pause();
-      }
-      e.stopImmediatePropagation();
+      console.log("TOGGLE PLAY");
+      doToggle();
+      e.preventDefault();
+    }
+    var deltaTime = 0;
+    if (e.key == "ArrowLeft") {
+      deltaTime = e.shiftKey ? -1 : -5;
+      e.preventDefault();
+    }
+    if (e.key == "ArrowRight") {
+      deltaTime = e.shiftKey ? 1 : 5;
+      e.preventDefault();
+    }
+
+    if (deltaTime != 0) {
+      const newTime = Math.max(0, ref.current.currentTime + deltaTime);
+      setTime(newTime);
+      ref.current.currentTime = newTime;
+    }
+
+    if (e.defaultPrevented) {
+      setIsShowingControls(true);
+      doHideControls(false);
     }
   };
 
   useEffect(() => {
-    if (!videoRef.current) return;
-    const video = videoRef.current;
+    if (!ref.current) return;
+    const video = ref.current;
     if (!isSeeking) {
       setIsPlaying(!video.paused);
 
@@ -240,10 +289,10 @@ export function VideoDisplay({
   useEffect(() => {
     if (!isSeeking) {
       videoTimeout.current = window.setInterval(() => {
-        if (!videoRef.current) return;
+        if (!ref.current) return;
         if (isSeeking) return;
-        if (time != videoRef.current.currentTime) {
-          setTime(videoRef.current.currentTime);
+        if (time != ref.current.currentTime) {
+          setTime(ref.current.currentTime);
         }
       }, 50);
     } else {
@@ -278,6 +327,10 @@ export function VideoDisplay({
   }, [containerRef.current]);
 
   useEffect(() => {
+    if (!isFullscreen) return;
+    function onKeydown(e: KeyboardEvent) {
+      doOnKeyDown(e);
+    }
     document.addEventListener("keydown", onKeydown);
     return () => {
       document.removeEventListener("keydown", onKeydown);
@@ -296,12 +349,8 @@ export function VideoDisplay({
         <div
           className="video-button play"
           onClick={() => {
-            if (videoRef.current?.paused) {
-              videoRef.current?.play();
-            } else {
-              videoRef.current?.pause();
-            }
-            setIsPlaying(!videoRef.current?.paused);
+            doToggle();
+            setIsPlaying(!ref.current?.paused);
           }}
         >
           {isEnded && (
@@ -416,9 +465,11 @@ export function VideoDisplay({
             }}
             onClick={() => {
               if (volume == 0) {
-                videoRef.current!.volume = globalVolume;
+                ref.current!.volume = globalVolume;
+                setVolume(globalVolume);
               } else {
-                videoRef.current!.volume = 0;
+                ref.current!.volume = 0;
+                setVolume(0);
               }
             }}
           >
@@ -475,6 +526,7 @@ export function VideoDisplay({
   return (
     <div
       className="video-container"
+      tabIndex={-1}
       ref={containerRef}
       onMouseLeave={() => {
         doHideControls(true);
@@ -487,6 +539,9 @@ export function VideoDisplay({
         if (!isLoaded) {
           onClick();
         }
+      }}
+      onKeyDown={(e) => {
+        doOnKeyDown(e.nativeEvent);
       }}
     >
       {!isLoaded && !isFullscreen && <img src={preload} />}
@@ -504,7 +559,7 @@ export function VideoDisplay({
       {isLoaded && (
         <>
           <video
-            ref={videoRef}
+            ref={ref}
             src={src}
             preload="metadata"
             style={{
@@ -547,11 +602,11 @@ export function VideoDisplay({
             onProgress={doBuffers}
             onDurationChange={() => {
               //console.log("DURATION CHANGE");
-              setDuration(videoRef.current?.duration ?? 0);
+              setDuration(ref.current?.duration ?? 0);
             }}
             onTimeUpdate={doBuffers}
             onVolumeChange={() => {
-              setVolume(videoRef.current!.volume);
+              //setVolume(ref.current!.volume);
             }}
             onError={(e) => {
               setIsErrored(true);
@@ -584,17 +639,13 @@ export function VideoDisplay({
                     const shouldShow = onClick();
                     if (!shouldShow) return;
 
-                    videoRef.current!.volume = globalVolume;
+                    ref.current!.volume = globalVolume;
                     setIsShowing(true);
-                    videoRef.current?.play();
+                    doPlay();
                     return;
                   }
 
-                  if (videoRef.current?.paused) {
-                    videoRef.current?.play();
-                  } else {
-                    videoRef.current?.pause();
-                  }
+                  doToggle();
                 }}
               >
                 {!isShowing && <PiPlayFill className="video-cover-icon play" />}
@@ -620,18 +671,22 @@ export function ImageDisplay({
   src,
   preload,
   onClick,
+  debug,
 }: {
   src: string;
   preload: string;
   onClick: () => void;
+  debug?: boolean;
 }) {
-  const [isLoaded, setIsLoaded] = useState(false);
+  const imgRef = useRef<HTMLImageElement>(null);
+  const [loadedSrc, setLoadedSrc] = useState<string>("");
   const [isErrored, setIsErrored] = useState(false);
 
   useEffect(() => {
-    //setIsLoaded(false);
+    setLoadedSrc("");
   }, [src]);
 
+  var loaded = loadedSrc == src;
   return (
     <div
       className="media-wrapper"
@@ -639,18 +694,91 @@ export function ImageDisplay({
         onClick();
       }}
     >
-      {!isLoaded && <PreloadDisplay src={preload} />}
+      {!loaded && <PreloadDisplay src={preload} />}
       {
         <img
+          ref={imgRef}
           src={src}
           onLoad={() => {
-            setIsLoaded(true);
+            imgRef.current.style.display = "block";
+            setLoadedSrc(src);
           }}
           onError={() => {
             setIsErrored(true);
           }}
           style={{
-            opacity: isLoaded ? 1 : 0,
+            display: loaded ? "block" : "none",
+          }}
+        />
+      }
+      {isErrored && (
+        <div className="media-error">
+          <PiWarningFill className="media-error-icon" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function AnimatedImageDisplay({
+  src,
+  preview,
+  preload,
+  onClick,
+  debug,
+}: {
+  src: string;
+  preview: string;
+  preload: string;
+  onClick: () => void;
+  debug?: boolean;
+}) {
+  const previewRef = useRef<HTMLImageElement>(null);
+  const animatedRef = useRef<HTMLImageElement>(null);
+  const [previewLoadedSrc, setPreviewLoadedSrc] = useState("");
+  const [animatedLoadedSrc, setAnimatedLoadedSrc] = useState("");
+
+  const [isErrored, setIsErrored] = useState(false);
+
+  var previewLoaded = previewLoadedSrc == src;
+  var animatedLoaded = animatedLoadedSrc == src;
+  return (
+    <div
+      className="media-wrapper"
+      onClick={() => {
+        onClick();
+      }}
+    >
+      {!previewLoaded && <PreloadDisplay src={preload} />}
+      {!animatedLoaded && (
+        <img
+          ref={previewRef}
+          src={preview}
+          onLoad={() => {
+            previewRef.current.style.display = "block";
+            setPreviewLoadedSrc(src);
+          }}
+          onError={() => {
+            setIsErrored(true);
+          }}
+          style={{
+            display: previewLoaded ? "block" : "none",
+          }}
+        />
+      )}
+      {
+        <img
+          ref={animatedRef}
+          src={src}
+          onLoad={() => {
+            animatedRef.current.style.display = "block";
+            setAnimatedLoadedSrc(src);
+          }}
+          onError={() => {
+            setIsErrored(true);
+          }}
+          style={{
+            display: animatedLoaded ? "block" : "none",
           }}
         />
       }

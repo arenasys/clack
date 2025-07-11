@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  useCallback,
+  useSyncExternalStore,
+  useRef,
+} from "react";
 
 export class EventBus {
   private events: Record<string, (() => void)[]> = {};
@@ -66,6 +73,29 @@ export function useEventBusDynamic<T>(
     );
     return () => unbinders.forEach((unbind) => unbind());
   }, [JSON.stringify(events), eventBus]);
+
+  return selected;
+}
+
+export function useEventBusDynamic2<T>(
+  eventBus: EventBus,
+  callback: () => [T, string[]],
+  deps: React.DependencyList = []
+): T {
+  const [tick, setTick] = useState(0);
+
+  const [selected, rawEvents] = useMemo(() => {
+    return callback();
+  }, [tick, ...deps]);
+
+  const events = Array.from(new Set(rawEvents)).sort();
+
+  useEffect(() => {
+    const unbinders = events.map((event) =>
+      eventBus.on(event, () => setTick((t) => t + 1))
+    );
+    return () => unbinders.forEach((unbind) => unbind());
+  }, [events.join("|"), eventBus]);
 
   return selected;
 }

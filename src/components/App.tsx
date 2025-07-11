@@ -5,14 +5,18 @@ import Channels from "./Channels";
 import Client from "./Client";
 import Header from "./Header";
 import { IconButton } from "./Common";
+
 import AttachmentModal from "./layers/modals/AttachmentModal";
 import ViewerModal from "./layers/modals/ViewerModal";
 import DeleteMessageModal from "./layers/modals/DeleteMessageModal";
 import ErrorModal from "./layers/modals/ErrorModal";
+import DragDropModal from "./layers/modals/DropModal";
+
 import TooltipPopup from "./layers/popups/TooltipPopup";
 import ContextMenuPopup from "./layers/popups/ContextMenuPopup";
 import UserPopup from "./layers/popups/UserPopup";
 import EmojiPickerPopup from "./layers/popups/EmojiPickerPopup";
+
 import LoadingScreen from "./layers/LoadingScreen";
 import LoginScreen from "./layers/LoginScreen";
 import CaptchaScreen from "./layers/CaptchaScreen";
@@ -85,6 +89,10 @@ function App() {
 
       <ErrorBoundary FallbackComponent={FallbackLayer}>
         <DeleteMessageModal />
+      </ErrorBoundary>
+
+      <ErrorBoundary FallbackComponent={FallbackLayer}>
+        <DragDropModal />
       </ErrorBoundary>
 
       <ErrorBoundary FallbackComponent={FallbackLayer}>

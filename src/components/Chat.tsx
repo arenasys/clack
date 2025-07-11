@@ -8,6 +8,7 @@ import {
   getClackState,
   ClackEvents,
 } from "../state";
+import { FilesToChatAttachments } from "../state/chat";
 
 import { useEffect, useRef, useState, useMemo } from "react";
 
@@ -21,31 +22,50 @@ import { Autocomplete, AutocompleteRef } from "./Autocomplete";
 import { ErrorBoundary } from "react-error-boundary";
 import { Fallback } from "./Error";
 
-import { ChooseFiles, FormatColor, GetFileType, MakeSnowflake } from "../util";
+import {
+  ChooseFiles,
+  FormatColor,
+  GetFileType,
+  MakeSnowflake,
+  isElementEditable,
+} from "../util";
 
 import { MarkdownTextbox, MarkdownTextboxRef } from "./Input";
 import { IconButton, TooltipWrapper } from "./Common";
 import List from "./List";
 import { Descendant } from "slate";
+import { is } from "date-fns/locale";
 
 export function Chat() {
   const messageView = useClackState(
     ClackEvents.current,
     (state) => state.chat.currentMessages
   );
-  const anchor = useClackState(
-    ClackEvents.current,
-    (state) => state.chat.getChatScroll() ?? ""
-  );
+  useClackState(ClackEvents.anchor, () => {});
   const setAnchor = getClackState((state) => state.chat.setChatScroll);
   const setTooltipPopup = getClackState((state) => state.gui.setTooltipPopup);
+
+  /*function setAnchorTimeout(
+    top: string,
+    center: string,
+    bottom: string,
+    fetching: boolean
+  ) {
+    setTimeout(() => {
+      setAnchor(top, center, bottom, fetching);
+    }, 0);
+  }*/
+
+  function getAnchor() {
+    return getClackState((state) => state.chat.getChatScroll() ?? "");
+  }
 
   return (
     <List
       id="chat-view"
       className="thick-scrollbar"
       data={messageView}
-      anchor={anchor}
+      getAnchor={getAnchor}
       setAnchor={setAnchor}
       entry={(id: string) => {
         return (
@@ -82,19 +102,8 @@ export function Input() {
     (state) => state.chat.currentFiles.length > 0
   );
   function addFiles(files: File[]) {
-    const newFiles = files.map((file) => {
-      return {
-        id: MakeSnowflake(),
-        file: file,
-        filename: file.name,
-        spoilered: false,
-        type: GetFileType(file.type),
-        mimetype: file.type,
-        blobURL: "",
-      };
-    });
-
-    setAttachments(newFiles, [], []);
+    const attachments = FilesToChatAttachments(files);
+    setAttachments(attachments, [], []);
   }
 
   const [replyingMention, setReplyingMention] = useState<boolean>(false);
@@ -166,6 +175,45 @@ export function Input() {
       textboxRef.current.setValue(state);
     }
   }, [currentChannel]);
+
+  useClackState(ClackEvents.editorFocus, () => {
+    setTimeout(() => {
+      if (textboxRef.current) {
+        textboxRef.current.focus();
+      }
+    }, 0);
+  });
+
+  // Capture any unhandled key events and paste events for the primary textbox.
+  // Need to mark events with preventDefault elsewhere so they dont get captured here.
+  useEffect(() => {
+    const isHandled = (e: KeyboardEvent | ClipboardEvent) => {
+      if (e.defaultPrevented) return true;
+      if (getClackState((state) => state.gui.hasModal())) return true;
+      if (isElementEditable(e.target)) return true;
+      return false;
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (isHandled(e)) return;
+
+      textboxRef.current?.capture(e);
+    };
+
+    const onPaste = (e: ClipboardEvent) => {
+      if (isHandled(e)) return;
+      console.log("CAPUTURE PASTE");
+      textboxRef.current?.focus();
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("paste", onPaste);
+
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("paste", onPaste);
+    };
+  }, [textboxRef]);
 
   const editor = (
     <MarkdownTextbox
@@ -268,8 +316,11 @@ export function Input() {
             if (autocompleteRef.current?.onKeyDown(event)) return;
 
             if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault();
-              if (currentChannel !== undefined) {
+              const isEmpty = plaintext.trim() === "";
+              const isAllowed = !isEmpty || isAttaching;
+              console.log("ENTER", `"${plaintext}"`, isEmpty, isAllowed);
+              if (currentChannel !== undefined && isAllowed) {
+                event.preventDefault();
                 sendMessage(plaintext);
 
                 console.log("SEND", `"${plaintext}"`);
@@ -281,6 +332,7 @@ export function Input() {
             if (e.clipboardData.files.length !== 0) {
               addFiles(Array.from(e.clipboardData.files));
             }
+            e.preventDefault();
           }}
         >
           {editor}
@@ -298,6 +350,7 @@ export function Input() {
               direction: "top",
               onPick: (_, text: string) => {
                 if (textboxRef.current) {
+                  textboxRef.current.focus();
                   textboxRef.current.insert(text + " ");
                 }
               },

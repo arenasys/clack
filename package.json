@@ -14,6 +14,7 @@
     "@twemoji/api": "^16.0.1",
     "crc-32": "^1.2.2",
     "date-fns": "^4.1.0",
+    "dequal": "^2.0.3",
     "fuzzysort": "^3.1.0",
     "highlight.js": "^11.11.1",
     "is-hotkey": "^0.2.0",

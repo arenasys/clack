@@ -64,33 +64,55 @@ export default function ContextMenuPopup() {
     return <></>;
   }
 
-  var flip = false;
-  if (
-    contextMenuPopup.direction == "right" &&
-    contextMenuPopup.position.y > window.innerHeight - 350
-  ) {
-    flip = true;
+  var flipX = false;
+  var flipY = false;
+
+  if (contextMenuPopup.position.x > window.innerWidth - 200) {
+    flipX = true;
+  }
+
+  if (contextMenuPopup.position.y > window.innerHeight - 350) {
+    flipY = true;
+  }
+
+  var position = {
+    top: undefined,
+    left: undefined,
+    bottom: undefined,
+    right: undefined,
+  };
+  const x = contextMenuPopup.position.x;
+  const y = contextMenuPopup.position.y;
+  const ox = contextMenuPopup.offset.x;
+  const oy = contextMenuPopup.offset.y;
+
+  if (flipX) {
+    position.right = window.innerWidth - x + ox;
+  } else {
+    position.left = x + ox;
+  }
+
+  if (flipY) {
+    position.bottom = window.innerHeight - y + oy;
+  } else {
+    position.top = y + oy;
   }
 
   return (
     <ClickWrapper
       passthrough={true}
       onClick={() => {
-        console.log("CLOSING MENU");
         setContextMenuPopup(undefined);
       }}
     >
       <div
         className={
-          "context-menu context-menu-" +
-          contextMenuPopup.direction +
-          (flip ? " flip" : "") +
+          "context-menu context-menu" +
+          (flipX ? " flip-x" : "") +
+          (flipY ? " flip-y" : "") +
           (contextMenuPopup.static ? " static" : "")
         }
-        style={{
-          top: contextMenuPopup.position.y,
-          left: contextMenuPopup.position.x,
-        }}
+        style={position}
       >
         {canReactMessage && (
           <div className="context-menu-entry">

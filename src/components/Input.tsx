@@ -575,6 +575,9 @@ export interface MarkdownTextboxRef {
   complete: (word: string, completion: string) => void;
   insert: (text: string) => void;
   setValue: (value: Descendant[]) => void;
+  focus: () => void;
+  blur: () => void;
+  capture: (e: KeyboardEvent) => void;
 }
 
 export const MarkdownTextbox = forwardRef(function MarkdownTextbox(
@@ -614,6 +617,30 @@ export const MarkdownTextbox = forwardRef(function MarkdownTextbox(
     },
     setValue: (value: Descendant[]) => {
       setValue(value);
+    },
+    focus: () => {
+      ReactEditor.focus(editor);
+    },
+    blur: () => {
+      ReactEditor.blur(editor);
+    },
+    capture: (e: KeyboardEvent) => {
+      // Used to capture unhandled key events
+
+      if (e.defaultPrevented) return;
+      if (e.altKey || e.ctrlKey) return;
+
+      console.log("CAPTURE KEY", e.key, e.code, e);
+
+      const isModifying =
+        e.key === "Enter" || e.key === "Backspace" || e.key === "Delete";
+      const isPrintable = e.key.length === 1;
+
+      if (!isModifying && !isPrintable) {
+        return;
+      }
+
+      ReactEditor.focus(editor);
     },
   }));
 
@@ -711,6 +738,8 @@ export const MarkdownTextbox = forwardRef(function MarkdownTextbox(
       return;
     }
 
+    lastValue.current = undefined;
+
     editor.children = value;
     editor.selection = null;
     if (editor.history) {
@@ -796,47 +825,64 @@ export const MarkdownTextbox = forwardRef(function MarkdownTextbox(
   });
 
   return (
-    <Slate
-      editor={editor}
-      initialValue={getInitialValue()}
-      onChange={(value) => {
-        // prevent the selection from being set inside an emoji (can happen when merging nodes etc)
-        if (isInsideInline(editor)) {
-          Transforms.move(editor, { distance: 1, unit: "offset" });
-        }
+    <div className="slate-editor">
+      <Slate
+        editor={editor}
+        initialValue={getInitialValue()}
+        onChange={(value) => {
+          // prevent the selection from being set inside an emoji (can happen when merging nodes etc)
+          if (isInsideInline(editor)) {
+            Transforms.move(editor, { distance: 1, unit: "offset" });
+          }
 
-        const valueString = JSON.stringify(value);
+          const valueString = JSON.stringify(value);
 
-        if (lastValue.current !== valueString) {
-          Editor.normalize(editor, {
-            force: true,
-          });
-          lastValue.current = valueString;
-          cachedDecorations.current = undefined;
-        }
+          if (lastValue.current === undefined) {
+            Transforms.select(editor, Editor.end(editor, []));
+          }
 
-        //setEditorState(valueString);
-        sendOnValue();
-      }}
-      onSelectionChange={(selection) => {}}
-    >
-      <Editable
-        decorate={decorate}
-        renderElement={renderElement}
-        renderLeaf={renderLeaf}
-        placeholder={placeholder ?? ""}
-        onKeyDown={onKeyDown}
-        onCopy={(event) => {
-          event.preventDefault();
-          if (!editor.selection || Range.isCollapsed(editor.selection)) return;
-          const fragment = Editor.fragment(editor, editor.selection);
-          event.clipboardData.setData(
-            "text/plain",
-            GetFragmentString(fragment, PlaintextType.USER)
-          );
+          if (lastValue.current !== valueString) {
+            Editor.normalize(editor, {
+              force: true,
+            });
+            lastValue.current = valueString;
+            cachedDecorations.current = undefined;
+          }
+
+          //setEditorState(valueString);
+          sendOnValue();
         }}
-      />
-    </Slate>
+        onSelectionChange={(selection) => {}}
+      >
+        <Editable
+          decorate={decorate}
+          renderElement={renderElement}
+          renderLeaf={renderLeaf}
+          placeholder={placeholder ?? ""}
+          onKeyDown={onKeyDown}
+          onCopy={(event) => {
+            event.preventDefault();
+            if (!editor.selection || Range.isCollapsed(editor.selection))
+              return;
+            const fragment = Editor.fragment(editor, editor.selection);
+            event.clipboardData.setData(
+              "text/plain",
+              GetFragmentString(fragment, PlaintextType.USER)
+            );
+          }}
+          onPaste={(event) => {
+            event.preventDefault();
+            if (event.clipboardData.types.includes("text/plain")) {
+              const text = event.clipboardData.getData("text/plain");
+              if (text.length > 0) {
+                Transforms.insertText(editor, text);
+              }
+            }
+          }}
+          scrollSelectionIntoView={() => {}}
+        />
+      </Slate>
+    </div>
   );
 });
 

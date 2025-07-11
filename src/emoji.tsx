@@ -1,5 +1,7 @@
 import twemoji from "@twemoji/api";
 
+import { Snowflake } from "./types";
+
 import { TooltipWrapper } from "./components/Common";
 
 import { StringSearchScore } from "./util";
@@ -59,7 +61,6 @@ import emojiMapRaw from "./assets/emoji_map.json";
 export const emojiMap: EmojiMap = emojiMapRaw as EmojiMap;
 
 import emojiNamesRaw from "./assets/emoji_names.json";
-import { Snowflake } from "./types";
 export const emojiNames: EmojiNames = emojiNamesRaw as EmojiNames;
 
 export const emojiIndex: EmojiIndex = (() => {
@@ -199,6 +200,7 @@ export function EmojiSearchByPartialName(text: string): EmojiEntry[] {
     .sort((a, b) => {
       const d = b[1] - a[1];
       if (d !== 0) return d;
+      return d;
       const an = a[0].names[0];
       const bn = b[0].names[0];
       return an.localeCompare(bn, undefined, {
@@ -220,13 +222,35 @@ export function EmojiInline({
 
   return (
     <TooltipWrapper tooltip={`:${name}:`} direction="top" delay={500}>
-      <EmojiSVG symbol={text} className={jumbo ? "jumbo" : ""} />
+      {jumbo ? (
+        <Emoji symbol={text} className={"jumbo"} size={40} />
+      ) : (
+        <Emoji symbol={text} size={22} />
+      )}
     </TooltipWrapper>
   );
 }
 
 export function EmojiInlineExternal({ text }: { text: string }) {
-  return <EmojiSVG symbol={text} className={"external"} />;
+  return <Emoji symbol={text} className={"external"} size={18} />;
+}
+
+export function Emoji({
+  symbol,
+  size,
+  svg = true,
+  className = "",
+}: {
+  symbol: string;
+  size: number;
+  svg?: boolean;
+  className?: string;
+}) {
+  return svg ? (
+    <EmojiSVG symbol={symbol} className={className} />
+  ) : (
+    <EmojiPNG symbol={symbol} size={size} className={className} />
+  );
 }
 
 export function EmojiSVG({
@@ -255,26 +279,33 @@ export function EmojiPNG({
   className,
 }: {
   symbol: string;
-  size?: number;
+  size: number;
   className?: string;
 }) {
   const entry = emojiIndex[symbol];
-  size = size || 40;
 
-  const atlas = size >= 40 ? "80x80" : "40x40";
+  const atlasSize = 40; //size > 40 ? 80 : 40;
+  const atlasScale = size / atlasSize;
 
   return (
-    <div
+    <span
       style={{
-        backgroundImage: `url(/emoji/png/${atlas}.png)`,
-        backgroundSize: `${ATLAS_COLS * size}px ${ATLAS_ROWS * size}px`,
-        backgroundPosition: `-${(entry.index % ATLAS_COLS) * size}px -${
-          Math.floor(entry.index / ATLAS_COLS) * size
+        backgroundImage: `url(/emoji/png/${atlasSize}x${atlasSize}.png)`,
+        backgroundSize: `${ATLAS_COLS * atlasSize * atlasScale}px ${
+          ATLAS_ROWS * atlasSize * atlasScale
+        }px`,
+        backgroundPosition: `-${
+          (entry.index % ATLAS_COLS) * atlasSize * atlasScale
+        }px -${
+          Math.floor(entry.index / ATLAS_COLS) * atlasSize * atlasScale
         }px`,
         width: `${size}px`,
         height: `${size}px`,
+        maxWidth: `${size}px`,
+        maxHeight: `${size}px`,
       }}
-      className={className}
-    ></div>
+      className={`emoji ${className ?? ""}`}
+      draggable="false"
+    ></span>
   );
 }

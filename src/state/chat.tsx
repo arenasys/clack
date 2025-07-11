@@ -30,20 +30,29 @@ import {
   MessageAddEvent,
   MessageUpdateEvent,
   MessageSendResponse,
+  ReactionAddEvent,
+  ReactionDeleteEvent,
 } from "../types";
+
+import { dequal } from "dequal";
+import fuzzysort from "fuzzysort";
 
 import { EmojiSearchByPartialName } from "../emoji";
 
-import fuzzysort from "fuzzysort";
+import {
+  ClackEvents,
+  updateClackState,
+  updateClackStateConditional,
+} from "../state";
 
-import { ClackEvents, updateClackState } from "../state";
-
-import { MakeSnowflake } from "../util";
+import { MakeSnowflake, GetFileType } from "../util";
 
 const previewURL = (message_id: Snowflake, id: Snowflake) =>
   `http://${window.location.host}/previews/${message_id}/${id}?type=thumbnail`;
 const displayURL = (message_id: Snowflake, id: Snowflake) =>
   `http://${window.location.host}/previews/${message_id}/${id}?type=display`;
+const animatedURL = (message_id: Snowflake, id: Snowflake) =>
+  `http://${window.location.host}/previews/${message_id}/${id}?type=animated`;
 const originalURL = (message_id: Snowflake, id: Snowflake, filename: string) =>
   `http://${window.location.host}/attachments/${message_id}/${id}/${filename}`;
 const proxyURL = (message_id: Snowflake, id: Snowflake, url: string) =>
@@ -73,6 +82,20 @@ export interface ChatPendingAttachment {
   type: AttachmentType;
   mimetype: string;
   blobURL: string;
+}
+
+export function FilesToChatAttachments(files: File[]): ChatPendingAttachment[] {
+  return files.map((file) => {
+    return {
+      id: MakeSnowflake(),
+      file: file,
+      filename: file.name,
+      spoilered: false,
+      type: GetFileType(file.type),
+      mimetype: file.type,
+      blobURL: "",
+    };
+  });
 }
 
 export class ChatChannelState {
@@ -128,7 +151,7 @@ export class ChatChannelState {
     return msgs;
   }
 
-  addMessages(msg: MessagesResponse) {
+  addMessages(msg: MessagesResponse, current: boolean = false) {
     const messages = msg.messages.map((m) => m.id);
     //.filter((id) => !this.messages.includes(id));
 
@@ -145,7 +168,7 @@ export class ChatChannelState {
         this.anchor?.startsWith("skeleton-") ||
         !(this.anchor ?? "" in this.messages)
       ) {
-        this.anchor = msg.after;
+        this.setAnchor(msg.after, current);
       }
       var i = messages.indexOf(msg.before);
       if (i != msg.limit + 1) {
@@ -166,7 +189,7 @@ export class ChatChannelState {
           this.anchor?.startsWith("skeleton-") ||
           !(this.anchor ?? "" in this.messages)
         ) {
-          this.anchor = msg.after;
+          this.setAnchor(msg.after, current);
         }
         if (messages.length < msg.limit) {
           this.lastMessage = messages[messages.length - 1];
@@ -184,7 +207,7 @@ export class ChatChannelState {
           this.anchor?.startsWith("skeleton-") ||
           !(this.anchor ?? "" in this.messages)
         ) {
-          this.anchor = msg.before;
+          this.setAnchor(msg.before, current);
         }
         if (messages.length < msg.limit) {
           this.firstMessage = messages[0];
@@ -194,7 +217,7 @@ export class ChatChannelState {
       //this.lastMessage = messages[messages.length - 1];
       this.messages.push(...messages);
       this.lastMessage = messages[messages.length - 1];
-      this.anchor = messages[messages.length - 1];
+      this.setAnchor(messages[messages.length - 1], current);
     }
   }
 
@@ -224,6 +247,25 @@ export class ChatChannelState {
 
   addPendingMessage(marker: Snowflake) {
     this.pendingMessages.push(marker);
+  }
+
+  setAnchor(newAnchor: Snowflake | undefined, update = true) {
+    if (this.anchor !== newAnchor) {
+      const oldAnchor = this.anchor;
+      this.anchor = newAnchor;
+
+      if (update) {
+        updateClackState(ClackEvents.anchor);
+      }
+
+      // Show the anchor in the UI
+      /*if (oldAnchor !== undefined) {
+        document.getElementById(oldAnchor)?.classList.remove("anchored");
+      }
+      if (newAnchor !== undefined) {
+        document.getElementById(newAnchor)?.classList.add("anchored");
+      }*/
+    }
   }
 
   clear() {
@@ -569,8 +611,28 @@ export class ChatState {
 
     this.currentEditor = state.editor;
     this.currentFiles = state.attachments;
+
+    function changeMessage(
+      oldID: Snowflake | undefined,
+      newID: Snowflake | undefined
+    ) {
+      if (oldID === newID) return;
+      if (oldID != undefined) {
+        updateClackState(ClackEvents.message(oldID));
+      }
+      if (newID != undefined) {
+        updateClackState(ClackEvents.message(newID));
+      }
+    }
+
+    const oldReplyingTo = this.currentReplyingTo;
     this.currentReplyingTo = state.replyingTo;
+    changeMessage(oldReplyingTo, this.currentReplyingTo);
+
+    const oldJumpedTo = this.currentJumpedTo;
     this.currentJumpedTo = state.jumpedTo;
+    changeMessage(oldJumpedTo, this.currentJumpedTo);
+
     this.currentJumpToPresent =
       state.lastMessage !== state.messages[state.messages.length - 1];
 
@@ -583,12 +645,12 @@ export class ChatState {
     bottom: Snowflake,
     fetch: boolean
   ) => {
-    console.log("SET CHAT SCROLL", fetch);
     if (!this.currentChannel) return;
     const state = this.channelStates.get(this.currentChannel);
     if (!state) return;
 
-    state.anchor = center;
+    state.setAnchor(center, false);
+
     if (state.fetching) return;
 
     const topIdx = this.currentMessages.indexOf(top);
@@ -657,7 +719,8 @@ export class ChatState {
       return;
     }
 
-    state.anchor = message;
+    state.setAnchor(message, true);
+
     state.jumpedTo = message;
     if (!state.messages.includes(message)) {
       state.messages = [];
@@ -704,6 +767,10 @@ export class ChatState {
     // no need to sync each keystroke
   };
 
+  setEditorFocused = () => {
+    updateClackState(ClackEvents.editorFocus);
+  };
+
   setAttachments = (
     add: ChatPendingAttachment[],
     remove: ChatPendingAttachment[],
@@ -736,9 +803,12 @@ export class ChatState {
     if (!state) return;
     state.replyingTo = message;
     this.syncCurrent(state);
+    this.setEditorFocused();
   };
 
   changeChannel = (channel: Snowflake) => {
+    if (this.currentChannel === channel) return;
+
     this.currentChannel = channel;
     const state = this.channelStates.get(channel);
     if (!state) return;
@@ -749,6 +819,8 @@ export class ChatState {
         data: { channel, limit: 50 },
       });
     }
+
+    updateClackState(ClackEvents.editorFocus);
   };
 
   sendMessage = (content: string) => {
@@ -851,29 +923,34 @@ export class ChatState {
     this.pushRequest({ type: EventType.MessageDelete, data: { message } });
   };
 
-  addReaction = (message: Snowflake, emoji: Snowflake) => {
-    if (!this.messages.has(message)) return;
-    const reactions = (this.messages.get(message)!.reactions ||= []);
-    let react = reactions.find((r) => r.emoji === emoji);
-    if (react) {
-      if (react.me) return;
-      react.me = true;
-      react.count++;
-      if (react.users.length < 5) react.users.push(this.currentUser!);
-    } else {
-      reactions.push({ emoji, users: [this.currentUser!], count: 1, me: true });
-    }
-    this.pushRequest({
-      type: EventType.MessageReactionAdd,
-      data: { message, emoji },
-    });
-  };
+  toggleReaction = (message: Snowflake, emoji: Snowflake) => {
+    const msg = this.messages.get(message);
+    if (!msg) return undefined;
+    const react = msg.reactions?.find((r) => r.emoji === emoji);
 
-  deleteReaction = (message: Snowflake, emoji: string) => {
-    this.pushRequest({
-      type: EventType.MessageReactionDelete,
-      data: { message, emoji },
-    });
+    if (react?.me) {
+      this.onReactionDelete({
+        message: message,
+        user: this.currentUser!,
+        emoji: emoji,
+      });
+
+      this.pushRequest({
+        type: EventType.MessageReactionDelete,
+        data: { message, emoji },
+      });
+    } else {
+      this.onReactionAdd({
+        message: message,
+        user: this.currentUser!,
+        emoji: emoji,
+      });
+
+      this.pushRequest({
+        type: EventType.MessageReactionAdd,
+        data: { message, emoji },
+      });
+    }
   };
 
   onOverview = (msg: OverviewResponse) => {
@@ -964,7 +1041,7 @@ export class ChatState {
 
   processUsers = (users: User[]) => {
     users.forEach((user) => {
-      this.users.set(user.id, user);
+      const oldUser = this.users.get(user.id);
       let color: number | undefined;
       let pos = Number.MAX_VALUE;
       user.roles.forEach((roleId) => {
@@ -975,12 +1052,13 @@ export class ChatState {
         }
       });
       user.color = color;
-      updateClackState(ClackEvents.user(user.id));
+      this.users.set(user.id, user);
+      updateClackStateConditional(ClackEvents.user(user.id), oldUser, user);
     });
   };
 
   onMessages = (msg: MessagesResponse) => {
-    console.log("ON MESSAGES", msg.channel, msg.messages.length);
+    //console.log("ON MESSAGES", msg.channel, msg.messages.length);
     const all = [...msg.messages, ...(msg.references ?? [])];
     this.processMessages(all);
     const unknown: Snowflake[] = [];
@@ -995,8 +1073,12 @@ export class ChatState {
     const state = this.channelStates.get(msg.channel);
     if (!state) return;
     state.fetching = false;
-    state.addMessages(msg);
-    if (this.currentChannel === msg.channel) this.syncCurrent(state);
+
+    const current = this.currentChannel === msg.channel;
+
+    state.addMessages(msg, current);
+
+    if (current) this.syncCurrent(state);
   };
 
   onMessageAdd = (msg: MessageAddEvent) => {
@@ -1019,8 +1101,8 @@ export class ChatState {
   };
 
   onMessageUpdate = (msg: MessageUpdateEvent) => {
+    console.log("ON MESSAGE UPDATE", msg);
     this.processMessages([msg.message]);
-    this.messages.set(msg.message.id, msg.message);
     if (this.pendingMessages.has(msg.message.id))
       this.pendingMessages.delete(msg.message.id);
   };
@@ -1043,6 +1125,63 @@ export class ChatState {
       if (pending.message === msg.message) this.pendingMessages.delete(key);
     }
 
+    updateClackState(ClackEvents.message(msg.message));
+  };
+
+  onReactionAdd = (msg: ReactionAddEvent) => {
+    const isMe = msg.user === this.currentUser;
+
+    if (!this.messages.has(msg.message)) return;
+    const message = this.messages.get(msg.message)!;
+
+    let react = message.reactions?.find((r) => r.emoji === msg.emoji);
+    if (!react) {
+      react = {
+        emoji: msg.emoji,
+        users: [msg.user],
+        count: 1,
+        me: isMe,
+      };
+      if (!message.reactions) message.reactions = [];
+      message.reactions.push(react);
+      updateClackState(ClackEvents.message(msg.message));
+    } else {
+      if (react.me && isMe) {
+        return;
+      }
+      react.count++;
+      if (react.users.length < 5) {
+        react.users.push(msg.user);
+      }
+      if (isMe && !react.me) {
+        react.me = true;
+      }
+      updateClackState(ClackEvents.message(msg.message));
+    }
+  };
+
+  onReactionDelete = (msg: ReactionDeleteEvent) => {
+    const isMe = msg.user === this.currentUser;
+
+    if (!this.messages.has(msg.message)) return;
+    const message = this.messages.get(msg.message)!;
+
+    const react = message.reactions?.find((r) => r.emoji === msg.emoji);
+    if (!react) return;
+
+    if (!react.me && isMe) {
+      return;
+    }
+    react.count--;
+    react.users = react.users.filter((u) => u !== msg.user);
+
+    if (isMe && react.me) {
+      react.me = false;
+    }
+    if (react.count === 0) {
+      const index = message.reactions!.indexOf(react);
+      if (index !== -1) message.reactions!.splice(index, 1);
+    }
     updateClackState(ClackEvents.message(msg.message));
   };
 
@@ -1157,6 +1296,10 @@ export class ChatState {
     else if (msg.type === EventType.MessageAdd) this.onMessageAdd(msg.data);
     else if (msg.type === EventType.MessageUpdate)
       this.onMessageUpdate(msg.data);
+    else if (msg.type === EventType.MessageReactionAdd)
+      this.onReactionAdd(msg.data);
+    else if (msg.type === EventType.MessageReactionDelete)
+      this.onReactionDelete(msg.data);
     else if (msg.type === EventType.ErrorResponse) this.onError(msg.data);
   };
 }

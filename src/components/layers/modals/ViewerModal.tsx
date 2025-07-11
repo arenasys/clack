@@ -1,16 +1,26 @@
-import { useEffect, useRef, useMemo, useState } from "react";
+import {
+  useEffect,
+  useRef,
+  useMemo,
+  useState,
+  memo,
+  useLayoutEffect,
+} from "react";
+
 import { Viewable, AttachmentType } from "../../../types";
 
 import { PiArrowLeftBold, PiArrowRightBold } from "react-icons/pi";
 
 import { useClackState, getClackState, ClackEvents } from "../../../state";
-import { VideoDisplay, ImageDisplay } from "../../Media";
-import { Modal, ModalHandle } from "../../Common";
+import { VideoDisplay, ImageDisplay, AnimatedImageDisplay } from "../../Media";
+import { Modal, ModalHandle, fadeAllMedia, fadeMedia } from "../../Common";
 
 const mod = (n: number, m: number) => ((n % m) + m) % m;
 
 export default function ViewerModal() {
   const modalRef = useRef<ModalHandle>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
+
   const viewerModal = useClackState(
     ClackEvents.viewerModal,
     (state) => state.gui.viewerModal
@@ -20,13 +30,26 @@ export default function ViewerModal() {
   const [isClosing, setIsClosing] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
 
-  const videoRef = useRef<HTMLVideoElement>(null);
+  function getVideoRef() {
+    if (viewerModal == undefined) return undefined;
+    const container = document.getElementById(
+      `viewer-track-item-${viewerModal.index}`
+    );
+    const video = container?.querySelector("video") ?? undefined;
+    return video as HTMLVideoElement | undefined;
+  }
 
-  const item = viewerModal?.items[viewerModal!.index];
+  function pauseVideo() {
+    const videoRef = getVideoRef();
+    if (videoRef && !videoRef.paused) {
+      fadeMedia(videoRef);
+    }
+  }
 
   function doLeft() {
     if (viewerModal == undefined) return;
     if (viewerModal.items.length <= 1) return;
+    pauseVideo();
     setViewerModal({
       items: viewerModal.items,
       index: mod(viewerModal.index - 1, viewerModal.items.length),
@@ -36,6 +59,7 @@ export default function ViewerModal() {
   function doRight() {
     if (viewerModal == undefined) return;
     if (viewerModal.items.length <= 1) return;
+    pauseVideo();
     setViewerModal({
       items: viewerModal.items,
       index: mod(viewerModal.index + 1, viewerModal.items.length),
@@ -47,29 +71,20 @@ export default function ViewerModal() {
 
     if (e.key == "Escape") {
       modalRef.current?.close();
+      e.preventDefault();
     }
 
     if (viewerModal == undefined) return;
 
     if (e.key == "ArrowLeft") {
       doLeft();
+      e.stopPropagation();
+      e.preventDefault();
     }
     if (e.key == "ArrowRight") {
       doRight();
-    }
-
-    if (e.key == " ") {
-      if (videoRef.current == null) return;
-      const ourVideo = videoRef.current!;
-
-      if (ourVideo.paused) {
-        ourVideo.play();
-      } else {
-        ourVideo.pause();
-      }
-      e.preventDefault();
-      e.stopImmediatePropagation();
       e.stopPropagation();
+      e.preventDefault();
     }
   }
 
@@ -77,35 +92,116 @@ export default function ViewerModal() {
     setIsClosing(false);
     setIsLoaded(false);
 
-    /*for (const item of viewerModal?.items ?? []) {
-      if (item.type == AttachmentType.Video) {
-        const video = document.createElement("video");
-        video.src = item.originalURL!;
-        video.preload = "metadata";
-        video.load();
-        console.log("Preloading video", item.originalURL);
-      }
-      if (item.type == AttachmentType.Image) {
-        const img = new Image();
-        img.src = item.displayURL!;
-        console.log("Preloading image", item.displayURL);
-      }
-    }*/
-
-    window.removeEventListener("keydown", onKeydown);
+    window.removeEventListener("keydown", onKeydown, { capture: true });
 
     if (viewerModal != undefined) {
-      window.addEventListener("keydown", onKeydown);
+      window.addEventListener("keydown", onKeydown, { capture: true });
     }
     return () => {
-      window.removeEventListener("keydown", onKeydown);
+      window.removeEventListener("keydown", onKeydown, { capture: true });
     };
   }, [viewerModal]);
 
-  var media = useMemo(() => {
+  useEffect(() => {
+    if (viewerModal == undefined) return;
+    fadeAllMedia();
+  }, [viewerModal === undefined]);
+
+  useEffect(() => {
+    if (viewerModal == undefined || isClosing) return;
+    const selectedViewable = trackRef.current?.querySelector<HTMLDivElement>(
+      `#viewer-track-item-${viewerModal.index}`
+    );
+    if (!selectedViewable) return;
+    const ref =
+      selectedViewable.querySelector<HTMLDivElement>(".viewer-attachment");
+    if (!ref) return;
+    ref.focus();
+  }, [viewerModal]);
+
+  if (viewerModal == undefined) {
+    return <></>;
+  }
+
+  function onClosing() {
+    setIsClosing(true);
+    fadeAllMedia();
+  }
+
+  function onClosed() {
+    setViewerModal(undefined);
+  }
+
+  const isMulti = viewerModal.items.length > 1;
+
+  return (
+    <Modal
+      ref={modalRef}
+      onClosing={onClosing}
+      onClosed={onClosed}
+      closingTime={250}
+    >
+      <div className="viewer-controls">
+        {isMulti && (
+          <div
+            className="viewer-button viewer-left-button"
+            onClick={(e) => {
+              doLeft();
+              e.stopPropagation();
+            }}
+          >
+            <PiArrowLeftBold className="viewer-button-icon" />
+          </div>
+        )}
+        {isMulti && (
+          <div
+            className="viewer-button viewer-right-button"
+            onClick={(e) => {
+              doRight();
+              e.stopPropagation();
+            }}
+          >
+            <PiArrowRightBold className="viewer-button-icon" />
+          </div>
+        )}
+      </div>
+
+      <div
+        ref={trackRef}
+        className="viewer-track"
+        style={{
+          left: `-${viewerModal.index * 100}vw`,
+          transformOrigin: `${(viewerModal.index + 0.5) * 100}vw center`,
+        }}
+      >
+        {viewerModal.items.map((item, index) => (
+          <div
+            id={`viewer-track-item-${index}`}
+            className={`viewer-track-item ${
+              viewerModal.index == index ? " visible" : ""
+            }`}
+            key={item.id}
+          >
+            <ViewerMedia item={item} />
+          </div>
+        ))}
+      </div>
+    </Modal>
+  );
+}
+
+export const ViewerMedia = memo(
+  function ViewerMedia({ item }: { item: Viewable }) {
+    const ref = useRef<HTMLDivElement>(null);
     if (item == undefined) {
       return null;
     }
+
+    const loaded = useRef<boolean>(false);
+
+    useEffect(() => {
+      loaded.current = true;
+    }, [item]);
 
     var maxWidth = 963;
     var maxHeight = 703;
@@ -126,13 +222,26 @@ export default function ViewerModal() {
 
     var inner: JSX.Element | null = null;
     if (item!.type == AttachmentType.Image) {
-      inner = (
-        <ImageDisplay
-          src={item!.displayURL!}
-          preload={item!.preload}
-          onClick={() => {}}
-        />
-      );
+      if (item!.mimetype == "image/gif") {
+        inner = (
+          <AnimatedImageDisplay
+            src={item!.originalURL!}
+            preview={item!.previewURL!}
+            preload={item!.preload}
+            onClick={() => {}}
+            debug={true}
+          />
+        );
+      } else {
+        inner = (
+          <ImageDisplay
+            src={item!.displayURL!}
+            preload={item!.preload}
+            onClick={() => {}}
+            debug={true}
+          />
+        );
+      }
     }
 
     if (item!.type == AttachmentType.Video) {
@@ -146,13 +255,13 @@ export default function ViewerModal() {
           onClick={() => {
             return true;
           }}
-          videoRef={videoRef}
         />
       );
     }
 
-    var outer = (
+    return (
       <div
+        ref={ref}
         className={"viewer-attachment"}
         onClick={(e) => {
           e.stopPropagation();
@@ -160,6 +269,12 @@ export default function ViewerModal() {
         style={{
           width: displayWidth,
           height: displayHeight,
+        }}
+        tabIndex={-1}
+        onFocus={(e) => {
+          const video =
+            ref.current?.querySelector<HTMLDivElement>(".video-container");
+          if (video) video.focus();
         }}
       >
         <div className="viewer-options-container">
@@ -175,75 +290,6 @@ export default function ViewerModal() {
         <div className="viewer-media-container">{inner}</div>
       </div>
     );
-
-    return {
-      inner: inner,
-      outer: outer,
-      width: displayWidth,
-      height: displayHeight,
-      multi: (viewerModal?.items.length ?? 0) > 1,
-    };
-  }, [item]);
-
-  if (viewerModal == undefined || item == undefined || media == null) {
-    return <></>;
-  }
-
-  function onClosing() {
-    setIsClosing(true);
-
-    if (videoRef.current) {
-      const video = videoRef.current;
-      let step = video.volume / 10;
-
-      let fade = setInterval(() => {
-        if (video.volume > step) {
-          video.volume = Math.max(video.volume - step, 0);
-        } else {
-          video.volume = 0;
-          clearInterval(fade);
-        }
-      }, 25);
-    }
-  }
-
-  function onClosed() {
-    setViewerModal(undefined);
-  }
-
-  return (
-    <Modal
-      ref={modalRef}
-      onClosing={onClosing}
-      onClosed={onClosed}
-      closingTime={250}
-    >
-      <div className="viewer-controls">
-        {media.multi && (
-          <div
-            className="viewer-button viewer-left-button"
-            onClick={(e) => {
-              doLeft();
-              e.stopPropagation();
-            }}
-          >
-            <PiArrowLeftBold className="viewer-button-icon" />
-          </div>
-        )}
-        {media.multi && (
-          <div
-            className="viewer-button viewer-right-button"
-            onClick={(e) => {
-              doRight();
-              e.stopPropagation();
-            }}
-          >
-            <PiArrowRightBold className="viewer-button-icon" />
-          </div>
-        )}
-      </div>
-
-      {media.outer}
-    </Modal>
-  );
-}
+  },
+  (prev, next) => prev.item.id === next.item.id
+);
