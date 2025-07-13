@@ -20,6 +20,9 @@ export class ClackEventsClass {
   role(id: string): string {
     return `role:${id}`;
   }
+  reactions(id: string): string {
+    return `reactions:${id}`;
+  }
   contextMenu(id: string): string {
     return `contextmenu:${id}`;
   }
@@ -34,12 +37,14 @@ export class ClackEventsClass {
   public anchor = `anchor` as const;
   public requests = `requests` as const;
   public attachmentModal = `attachmentModal` as const;
-  public deleteMessageModal = `deleteMessageModal` as const;
+  public messageDeleteModal = `messageDeleteModal` as const;
+  public messageReactionsModal = `messageReactionsModal` as const;
   public errorModal = `errorModal` as const;
   public viewerModal = `viewerModal` as const;
   public contextMenuPopup = `contextMenuPopup` as const;
   public emojiPickerPopup = `emojiPickerPopup` as const;
   public tooltipPopup = `tooltipPopup` as const;
+  public reactionTooltipPopup = `reactionTooltipPopup` as const;
   public userPopup = `userPopup` as const;
   public editorFocus = `editorFocus` as const;
 }

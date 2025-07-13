@@ -220,53 +220,56 @@ export const enum Permissions {
 }
 
 export const enum EventType {
-  ErrorResponse = 0,
+  ErrorResponse,
 
-  SettingsResponse = 1,
-  OverviewResponse = 2,
+  SettingsResponse,
+  OverviewResponse,
 
-  MessagesRequest = 3,
-  MessagesResponse = 4,
+  MessagesRequest,
+  MessagesResponse,
 
-  UsersRequest = 5,
-  UsersResponse = 6,
+  UsersRequest,
+  UsersResponse,
 
-  UserListRequest = 7,
-  UserListResponse = 8,
+  UserListRequest,
+  UserListResponse,
 
-  MessageSendRequest = 9,
-  MessageSendResponse = 10,
+  MessageSendRequest,
+  MessageSendResponse,
 
-  MessageAdd = 11,
-  MessageUpdate = 12,
-  MessageDelete = 13,
-  MessageDeleteBulk = 14,
+  MessageAdd,
+  MessageUpdate,
+  MessageDelete,
+  MessageDeleteBulk,
 
-  MessageReactionAdd = 15,
-  MessageReactionDelete = 16,
-  MessageReactionDeleteAll = 17,
-  MessageReactionDeleteEmoji = 18,
+  MessageReactionAdd,
+  MessageReactionDelete,
+  MessageReactionDeleteAll,
+  MessageReactionDeleteEmoji,
 
-  ChannelAdd = 19,
-  ChannelUpdate = 20,
-  ChannelDelete = 21,
-  ChannelPinsUpdate = 22,
+  MessageReactionUsersRequest,
+  MessageReactionUsersResponse,
 
-  RoleAdd = 23,
-  RoleUpdate = 24,
-  RoleDelete = 25,
+  ChannelAdd,
+  ChannelUpdate,
+  ChannelDelete,
+  ChannelPinsUpdate,
 
-  UserAdd = 26,
-  UserDelete = 27,
-  UserUpdate = 28,
+  RoleAdd,
+  RoleUpdate,
+  RoleDelete,
 
-  UserPresence = 29,
-  UserTyping = 30,
+  UserAdd,
+  UserDelete,
+  UserUpdate,
 
-  LoginRequest = 31,
-  TokenResponse = 32,
-  LogoutRequest = 33,
-  RegisterRequest = 34,
+  UserPresence,
+  UserTyping,
+
+  LoginRequest,
+  TokenResponse,
+  LogoutRequest,
+  RegisterRequest,
 }
 
 export const EventTypeDescriptions: { [key: number]: string } = {
@@ -428,6 +431,17 @@ export interface ReactionDeleteAllEvent {
 export interface ReactionDeleteEmojiEvent {
   message: Snowflake;
   emoji: Snowflake;
+}
+
+export interface ReactionUsersRequest {
+  message: Snowflake;
+  emoji: Snowflake;
+}
+
+export interface ReactionUsersResponse {
+  message: Snowflake;
+  emoji: Snowflake;
+  users: Snowflake[];
 }
 
 export interface LoginRequest {

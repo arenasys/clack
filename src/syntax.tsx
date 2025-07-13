@@ -239,7 +239,6 @@ export const codeBlockRule: SyntaxRule = {
         !ref.current.getAttribute("data-highlighted")
       ) {
         if (hljs.getLanguage(lang)) {
-          console.log("HIGHLIGHT", ref.current, lang);
           hljs.highlightElement(ref.current);
         }
       }
@@ -806,11 +805,35 @@ export function SyntaxContent({
       var elementChildren: (JSX.Element | string)[] = [];
 
       var last = 0;
-      for (const match of FindEmojis(elementText)) {
+
+      const matches = FindEmojis(elementText);
+
+      // Render emojis as jumbo if there is only emojis and whitespace
+      var hasNonEmoji = false;
+      if (ranges.length > 1) {
+        hasNonEmoji = true;
+      } else {
+        for (const match of matches) {
+          const pre = text.substring(last, match.start);
+          if (pre.trim().length > 0) {
+            hasNonEmoji = true;
+          }
+          last = match.end;
+        }
+        if (last < text.length) {
+          const post = text.substring(last);
+          if (post.trim().length > 0) {
+            hasNonEmoji = true;
+          }
+        }
+      }
+
+      last = 0;
+      for (const match of matches) {
         if (match.start > last) {
           elementChildren.push(elementText.substring(last, match.start));
         }
-        const jumbo = !inline && match.start == 0 && match.end == text.length;
+        const jumbo = !inline && !hasNonEmoji;
         elementChildren.push(
           <EmojiInline text={match.emoji} jumbo={jumbo} key={`range-${i++}`} />
         );

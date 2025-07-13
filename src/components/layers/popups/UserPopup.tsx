@@ -11,7 +11,6 @@ import { FormatColor } from "../../../util";
 import { ClickWrapper } from "../../Common";
 
 export default function UserPopup() {
-  const ref = useRef<HTMLDivElement>(null);
   const userPopup = useClackState(
     ClackEvents.userPopup,
     (state) => state.gui.userPopup
@@ -46,17 +45,15 @@ export default function UserPopup() {
         if (userPopup == undefined) {
           return;
         }
-        setUserPopup(undefined);
+        if (getClackState((state) => state.gui.userPopup)?.id == userPopup.id) {
+          setUserPopup(undefined);
+        }
       }}
     >
       <div className="layer-container layer-popup">
         <div
-          ref={ref}
-          className={
-            "user-popup user-popup-" +
-            userPopup.direction +
-            (flip ? " flip" : "")
-          }
+          key={userPopup.id}
+          className={`user-popup-anchor user-popup-anchor-${userPopup.direction}`}
           style={
             userPopup.direction === "left"
               ? {
@@ -69,37 +66,47 @@ export default function UserPopup() {
                 }
           }
         >
-          <div className="user-popup-content">
-            <div className="user-popup-header">
-              <div className="user-popup-banner"></div>
-              <div className="user-popup-avatar">
-                <UserAvatarBigSVG user={userPopup.user} size={100} />
+          <div
+            className={
+              "user-popup user-popup-" +
+              userPopup.direction +
+              (flip ? " flip" : "")
+            }
+          >
+            <div className="user-popup-content">
+              <div className="user-popup-header">
+                <div className="user-popup-banner"></div>
+                <div className="user-popup-avatar">
+                  <UserAvatarBigSVG user={userPopup.user} size={100} />
+                </div>
               </div>
+              <div className="user-popup-body">
+                <div>
+                  <h1 className="user-popup-nickname">
+                    {userPopup.user.nickname}
+                  </h1>
+                  <span className="user-popup-username">
+                    {userPopup.user.username}
+                  </span>
+                </div>
+                <div className="user-popup-roles">
+                  {userRoles.map((role) => {
+                    return (
+                      <div key={role.id} className="user-popup-role">
+                        <span
+                          className="user-popup-role-color"
+                          style={{ backgroundColor: FormatColor(role.color) }}
+                        />
+                        <span className="user-popup-role-name">
+                          {role.name}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="user-popup-footer"></div>
             </div>
-            <div className="user-popup-body">
-              <div>
-                <h1 className="user-popup-nickname">
-                  {userPopup.user.nickname}
-                </h1>
-                <span className="user-popup-username">
-                  {userPopup.user.username}
-                </span>
-              </div>
-              <div className="user-popup-roles">
-                {userRoles.map((role) => {
-                  return (
-                    <div key={role.id} className="user-popup-role">
-                      <span
-                        className="user-popup-role-color"
-                        style={{ backgroundColor: FormatColor(role.color) }}
-                      />
-                      <span className="user-popup-role-name">{role.name}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-            <div className="user-popup-footer"></div>
           </div>
         </div>
       </div>

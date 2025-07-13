@@ -8,9 +8,10 @@ import { IconButton } from "./Common";
 
 import AttachmentModal from "./layers/modals/AttachmentModal";
 import ViewerModal from "./layers/modals/ViewerModal";
-import DeleteMessageModal from "./layers/modals/DeleteMessageModal";
+import MessageDeleteModal from "./layers/modals/MessageDeleteModal";
+import MessageReactionsModal from "./layers/modals/MessageReactionsModal";
 import ErrorModal from "./layers/modals/ErrorModal";
-import DragDropModal from "./layers/modals/DropModal";
+import DropModal from "./layers/modals/DropModal";
 
 import TooltipPopup from "./layers/popups/TooltipPopup";
 import ContextMenuPopup from "./layers/popups/ContextMenuPopup";
@@ -24,6 +25,7 @@ import CaptchaScreen from "./layers/CaptchaScreen";
 import { RiArrowDownSLine } from "react-icons/ri";
 import { ErrorBoundary } from "react-error-boundary";
 import { Fallback, FallbackLayer } from "./Error";
+import ReactionTooltipPopup from "./layers/popups/ReactionTooltipPopup";
 
 function App() {
   return (
@@ -79,6 +81,11 @@ function App() {
           </div>
         </div>
       </div>
+
+      <ErrorBoundary FallbackComponent={FallbackLayer}>
+        <ReactionTooltipPopup />
+      </ErrorBoundary>
+
       <ErrorBoundary FallbackComponent={FallbackLayer}>
         <AttachmentModal />
       </ErrorBoundary>
@@ -88,11 +95,15 @@ function App() {
       </ErrorBoundary>
 
       <ErrorBoundary FallbackComponent={FallbackLayer}>
-        <DeleteMessageModal />
+        <MessageDeleteModal />
       </ErrorBoundary>
 
       <ErrorBoundary FallbackComponent={FallbackLayer}>
-        <DragDropModal />
+        <MessageReactionsModal />
+      </ErrorBoundary>
+
+      <ErrorBoundary FallbackComponent={FallbackLayer}>
+        <DropModal />
       </ErrorBoundary>
 
       <ErrorBoundary FallbackComponent={FallbackLayer}>

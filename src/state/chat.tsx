@@ -32,6 +32,7 @@ import {
   MessageSendResponse,
   ReactionAddEvent,
   ReactionDeleteEvent,
+  ReactionUsersResponse,
 } from "../types";
 
 import { dequal } from "dequal";
@@ -392,6 +393,38 @@ export class ChatRoleStore {
   }
 }
 
+export class ChatReactionUserStore {
+  store: Map<Snowflake, Snowflake[]> = new Map(); // emoji => users
+  fetching: boolean = false;
+
+  setReactionUsers(emoji: Snowflake, users: Snowflake[]) {
+    this.store.set(emoji, users);
+  }
+
+  getReactionUsers(emoji: Snowflake): Snowflake[] | undefined {
+    return this.store.get(emoji);
+  }
+
+  addReactionUser(emoji: Snowflake, user: Snowflake) {
+    if (!this.store.has(emoji)) return;
+    const users = this.store.get(emoji);
+    if (users && !users.includes(user)) {
+      users.push(user);
+    }
+  }
+
+  deleteReactionUser(emoji: Snowflake, user: Snowflake) {
+    if (!this.store.has(emoji)) return;
+    const users = this.store.get(emoji);
+    if (users) {
+      const index = users.indexOf(user);
+      if (index !== -1) {
+        users.splice(index, 1);
+      }
+    }
+  }
+}
+
 interface PendingMessage {
   marker: Snowflake;
   channel: Snowflake;
@@ -423,6 +456,7 @@ export class ChatState {
   channelGroups: ChatChannelGroup[] = [];
   userOrder: ChatUserOrder = new ChatUserOrder();
   channelStates: Map<Snowflake, ChatChannelState> = new Map();
+  reactionUsers: Map<Snowflake, ChatReactionUserStore> = new Map();
 
   authState: ChatAuthState = ChatAuthState.Disconnected;
   authError: ErrorResponse | undefined = undefined;
@@ -454,7 +488,7 @@ export class ChatState {
     const event = { type: EventType.LoginRequest, data: request };
 
     if (this.settings?.usesLoginCaptcha) {
-      this.requestPendingCaptcha = event;
+      this.pushRequestWithCaptcha(event);
     } else {
       this.pushRequest(event);
     }
@@ -471,8 +505,9 @@ export class ChatState {
     const request: RegisterRequest = { username, password, email, inviteCode };
     const event = { type: EventType.RegisterRequest, data: request };
 
+    console.log(this.settings);
     if (this.settings?.usesCaptcha) {
-      this.requestPendingCaptcha = event;
+      this.pushRequestWithCaptcha(event);
     } else {
       this.pushRequest(event);
     }
@@ -547,6 +582,7 @@ export class ChatState {
     this.requestPendingCaptcha.data.captchaResponse = captchaResponse;
     this.pushRequest(this.requestPendingCaptcha);
     this.requestPendingCaptcha = undefined;
+    updateClackState(ClackEvents.captcha);
   };
 
   processRoles = (roles: Role[]) => {
@@ -953,6 +989,23 @@ export class ChatState {
     }
   };
 
+  fetchReactionUsers = (message: Snowflake, emoji: Snowflake) => {
+    if (!this.reactionUsers.has(message)) {
+      this.reactionUsers.set(message, new ChatReactionUserStore());
+    }
+
+    const reactionStore = this.reactionUsers.get(message)!;
+    if (reactionStore.fetching) return;
+    reactionStore.fetching = true;
+
+    console.log("FETCH", message, emoji);
+
+    this.pushRequest({
+      type: EventType.MessageReactionUsersRequest,
+      data: { message, emoji },
+    });
+  };
+
   onOverview = (msg: OverviewResponse) => {
     this.processRoles(msg.roles);
     this.processChannels(msg.channels);
@@ -1057,19 +1110,35 @@ export class ChatState {
     });
   };
 
-  onMessages = (msg: MessagesResponse) => {
-    //console.log("ON MESSAGES", msg.channel, msg.messages.length);
-    const all = [...msg.messages, ...(msg.references ?? [])];
-    this.processMessages(all);
+  fetchUnknownUsers = (users: Snowflake[]) => {
     const unknown: Snowflake[] = [];
-    all.forEach((m) => {
-      if (!this.users.has(m.author)) unknown.push(m.author);
+
+    [...new Set(users)].forEach((id) => {
+      if (!this.users.has(id)) unknown.push(id);
     });
-    if (unknown.length)
+    if (unknown.length) {
       this.pushRequest({
         type: EventType.UsersRequest,
         data: { users: unknown },
       });
+    }
+  };
+
+  onMessages = (msg: MessagesResponse) => {
+    //console.log("ON MESSAGES", msg.channel, msg.messages.length);
+    const all = [...msg.messages, ...(msg.references ?? [])];
+    this.processMessages(all);
+
+    var users = all.map((m) => m.author);
+    all.forEach((m) => {
+      m.reactions?.forEach((r) => {
+        if (r.users) {
+          users.push(...r.users);
+        }
+      });
+    });
+    this.fetchUnknownUsers(users);
+
     const state = this.channelStates.get(msg.channel);
     if (!state) return;
     state.fetching = false;
@@ -1131,8 +1200,15 @@ export class ChatState {
   onReactionAdd = (msg: ReactionAddEvent) => {
     const isMe = msg.user === this.currentUser;
 
+    this.fetchUnknownUsers([msg.user]);
+
     if (!this.messages.has(msg.message)) return;
     const message = this.messages.get(msg.message)!;
+
+    const store = this.reactionUsers.get(msg.message);
+    if (store) {
+      store.addReactionUser(msg.emoji, msg.user);
+    }
 
     let react = message.reactions?.find((r) => r.emoji === msg.emoji);
     if (!react) {
@@ -1144,7 +1220,7 @@ export class ChatState {
       };
       if (!message.reactions) message.reactions = [];
       message.reactions.push(react);
-      updateClackState(ClackEvents.message(msg.message));
+      updateClackState(ClackEvents.reactions(msg.message));
     } else {
       if (react.me && isMe) {
         return;
@@ -1156,15 +1232,22 @@ export class ChatState {
       if (isMe && !react.me) {
         react.me = true;
       }
-      updateClackState(ClackEvents.message(msg.message));
+      updateClackState(ClackEvents.reactions(msg.message));
     }
   };
 
   onReactionDelete = (msg: ReactionDeleteEvent) => {
     const isMe = msg.user === this.currentUser;
 
+    this.fetchUnknownUsers([msg.user]);
+
     if (!this.messages.has(msg.message)) return;
     const message = this.messages.get(msg.message)!;
+
+    const store = this.reactionUsers.get(msg.message);
+    if (store) {
+      store.deleteReactionUser(msg.emoji, msg.user);
+    }
 
     const react = message.reactions?.find((r) => r.emoji === msg.emoji);
     if (!react) return;
@@ -1182,7 +1265,20 @@ export class ChatState {
       const index = message.reactions!.indexOf(react);
       if (index !== -1) message.reactions!.splice(index, 1);
     }
-    updateClackState(ClackEvents.message(msg.message));
+    updateClackState(ClackEvents.reactions(msg.message));
+  };
+
+  onReactionUsers = (msg: ReactionUsersResponse) => {
+    if (!this.reactionUsers.has(msg.message)) {
+      this.reactionUsers.set(msg.message, new ChatReactionUserStore());
+    }
+
+    const reactionStore = this.reactionUsers.get(msg.message)!;
+    reactionStore.fetching = false;
+    reactionStore.setReactionUsers(msg.emoji, msg.users);
+
+    this.fetchUnknownUsers(msg.users);
+    updateClackState(ClackEvents.reactions(msg.message));
   };
 
   onUsers = (msg: UsersResponse) => {
@@ -1191,18 +1287,7 @@ export class ChatState {
 
   onUserList = (msg: UserListResponse) => {
     this.userOrder.setResponse(msg);
-    const unknown: Snowflake[] = [];
-    msg.groups.forEach((g) =>
-      g.users.forEach((u) => {
-        if (!this.users.has(u)) unknown.push(u);
-      })
-    );
-    if (unknown.length)
-      this.pushRequest({
-        type: EventType.UsersRequest,
-        data: { users: unknown },
-      });
-
+    msg.groups.forEach((g) => this.fetchUnknownUsers(g.users));
     updateClackState(ClackEvents.userList);
   };
 
@@ -1282,6 +1367,20 @@ export class ChatState {
     return value;
   };
 
+  pushRequestWithCaptcha = (request: any) => {
+    if (this.requestPendingCaptcha) {
+      console.warn(
+        "Already pending for captcha.",
+        this.requestPendingCaptcha,
+        request
+      );
+      return;
+    }
+    // Let CaptchaScreen get us a captcha response, we continue from FinishCaptcha
+    this.requestPendingCaptcha = request;
+    updateClackState(ClackEvents.captcha);
+  };
+
   onResponse = (msg: any) => {
     if (msg.type === EventType.SettingsResponse) this.onSettings(msg.data);
     else if (msg.type === EventType.TokenResponse) this.onToken(msg.data);
@@ -1300,6 +1399,8 @@ export class ChatState {
       this.onReactionAdd(msg.data);
     else if (msg.type === EventType.MessageReactionDelete)
       this.onReactionDelete(msg.data);
+    else if (msg.type === EventType.MessageReactionUsersResponse)
+      this.onReactionUsers(msg.data);
     else if (msg.type === EventType.ErrorResponse) this.onError(msg.data);
   };
 }

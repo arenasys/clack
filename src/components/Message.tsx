@@ -4,6 +4,7 @@ import {
   ClackEvents,
   useClackStateDynamic,
 } from "../state";
+import { Reaction } from "../types";
 
 import { useEffect, useRef, useState, useMemo } from "react";
 
@@ -18,7 +19,7 @@ import {
   Permissions,
 } from "../types";
 
-import { EmojiInline } from "../emoji";
+import { Emoji } from "../emoji";
 
 import { VideoDisplay, ImageDisplay, AnimatedImageDisplay } from "./Media";
 
@@ -47,7 +48,6 @@ import { FaFile, FaFileUpload, FaTimes } from "react-icons/fa";
 import Rand from "rand-seed";
 import { IconButton, TooltipWrapper } from "./Common";
 import { MessageContextMenuState } from "../state/gui";
-import { set } from "date-fns";
 
 export function MessageEntry({ id }: { id: string }) {
   const content = useMemo(() => {
@@ -1218,11 +1218,77 @@ function MessageReference({ id }: { id: string }) {
   );
 }
 
+function MessageReaction({
+  id,
+  react,
+  index,
+}: {
+  id: Snowflake;
+  react: Reaction;
+  index: number;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const toggleReaction = getClackState((state) => state.chat.toggleReaction);
+
+  const setReactionTooltipPopup = getClackState(
+    (state) => state.gui.setReactionTooltipPopup
+  );
+  const tooltipTimeout = useRef<number | null>(null);
+
+  function showTooltip() {
+    if (tooltipTimeout.current) {
+      window.clearTimeout(tooltipTimeout.current);
+      tooltipTimeout.current = null;
+    }
+
+    tooltipTimeout.current = window.setTimeout(() => {
+      if (ref.current == null) return;
+      const rect = ref.current.getBoundingClientRect();
+
+      console.log("Showing tooltip for reaction", id, react.emoji);
+      setReactionTooltipPopup({
+        message: id,
+        emoji: react.emoji,
+        position: {
+          x: (rect.left + rect.right) / 2,
+          y: rect.top - 8,
+        },
+      });
+    }, 750);
+  }
+
+  function hideTooltip() {
+    if (tooltipTimeout.current) {
+      window.clearTimeout(tooltipTimeout.current);
+      tooltipTimeout.current = null;
+    }
+    setReactionTooltipPopup(undefined);
+  }
+
+  return (
+    <div
+      ref={ref}
+      className={`message-reaction ${react.me ? "you" : ""}`}
+      onClick={() => {
+        toggleReaction(id, react.emoji);
+      }}
+      onMouseEnter={(e) => {
+        showTooltip();
+      }}
+      onMouseLeave={(e) => {
+        hideTooltip();
+      }}
+    >
+      <Emoji symbol={react.emoji} size={22} />
+      <span className="message-reaction-count">{react.count}</span>
+    </div>
+  );
+}
+
 function MessageReactions({ id }: { id: string }) {
-  const reactions = useClackState(ClackEvents.message(id), (state) => {
+  const reactions = useClackState(ClackEvents.reactions(id), (state) => {
     return state.chat.messages.get(id)?.reactions ?? [];
   });
-  const toggleReaction = getClackState((state) => state.chat.toggleReaction);
 
   if (reactions.length == 0) {
     return <></>;
@@ -1230,20 +1296,14 @@ function MessageReactions({ id }: { id: string }) {
 
   return (
     <div className="message-reactions">
-      {reactions.map((react, index) => {
-        return (
-          <div
-            key={`${id}-reaction-${index}`}
-            className={`message-reaction ${react.me ? "you" : ""}`}
-            onClick={() => {
-              toggleReaction(id, react.emoji);
-            }}
-          >
-            <EmojiInline text={react.emoji} />
-            <span className="message-reaction-count">{react.count}</span>
-          </div>
-        );
-      })}
+      {reactions.map((react, index) => (
+        <MessageReaction
+          key={`${id}-reaction-${index}`}
+          id={id}
+          react={react}
+          index={index}
+        />
+      ))}
     </div>
   );
 }

@@ -22,11 +22,25 @@ const maskAvatar = (
       rx="20"
       ry="20"
     ></rect>
+  </>
+);
+
+const maskAvatarStatus = (
+  <>
+    <rect
+      fill="white"
+      x="0"
+      y="0"
+      width="40"
+      height="40"
+      rx="20"
+      ry="20"
+    ></rect>
     <circle fill="black" cx="34" cy="34" r="10"></circle>
   </>
 );
 
-const maskAvatarBig = (
+const maskAvatarStatusBig = (
   <>
     <rect
       fill="white"
@@ -66,9 +80,9 @@ export function UserAvatarSVG({ user, size }: { user: User; size: number }) {
       viewBox="0 0 40 40"
       className="user-avatar-svg"
     >
-      <mask id="avatar-mask">
+      <mask id="avatar-status-mask">
         <svg x="0" y="0" width="32" height="32" viewBox="0 0 40 40">
-          {maskAvatar}
+          {maskAvatarStatus}
         </svg>
       </mask>
       <image
@@ -77,10 +91,10 @@ export function UserAvatarSVG({ user, size }: { user: User; size: number }) {
         width="32"
         height="32"
         href="/avatar.png"
-        mask="url(#avatar-mask)"
+        mask="url(#avatar-status-mask)"
       />
 
-      <mask id={"status-mask-" + statusName}>
+      <mask id={"avatar-status-mask-" + statusName}>
         <svg x="22" y="22" width="10" height="10" viewBox="0 0 12 12">
           {statusMask}
         </svg>
@@ -91,7 +105,7 @@ export function UserAvatarSVG({ user, size }: { user: User; size: number }) {
         y="22"
         width="10"
         height="10"
-        mask={`url(#${"status-mask-" + statusName})`}
+        mask={`url(#${"avatar-status-mask-" + statusName})`}
       />
     </svg>
   );
@@ -108,9 +122,9 @@ export function UserAvatarBigSVG({ user, size }: { user: User; size: number }) {
       viewBox="0 0 100 100"
       className="user-avatar-svg"
     >
-      <mask id="avatar-mask-big">
+      <mask id="avatar-status-mask-big">
         <svg x="0" y="0" width="80" height="80" viewBox="0 0 40 40">
-          {maskAvatarBig}
+          {maskAvatarStatusBig}
         </svg>
       </mask>
       <image
@@ -119,10 +133,10 @@ export function UserAvatarBigSVG({ user, size }: { user: User; size: number }) {
         width="80"
         height="80"
         href="/avatar.png"
-        mask="url(#avatar-mask-big)"
+        mask="url(#avatar-status-mask-big)"
       />
 
-      <mask id={"status-mask-" + statusName + "-big"}>
+      <mask id={"avatar-status-mask-" + statusName + "-big"}>
         <svg x="60" y="60" width="16" height="16" viewBox="0 0 12 12">
           {statusMask}
         </svg>
@@ -133,7 +147,32 @@ export function UserAvatarBigSVG({ user, size }: { user: User; size: number }) {
         y="60"
         width="16"
         height="16"
-        mask={`url(#${"status-mask-" + statusName + "-big"})`}
+        mask={`url(#${"avatar-status-mask-" + statusName + "-big"})`}
+      />
+    </svg>
+  );
+}
+
+export function UserAvatarSimple({ id, size }: { id: string; size: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 40 40"
+      className="user-avatar-svg"
+    >
+      <mask id="avatar-mask">
+        <svg x="0" y="0" width="40" height="40" viewBox="0 0 40 40">
+          {maskAvatar}
+        </svg>
+      </mask>
+      <image
+        x="0"
+        y="0"
+        width="40"
+        height="40"
+        href="/avatar.png"
+        mask="url(#avatar-mask)"
       />
     </svg>
   );

@@ -5,7 +5,6 @@ import { useClackState, getClackState, ClackEvents } from "../../../state";
 import { AttachmentType } from "../../../types";
 
 import { ClickWrapper, Modal, ModalHandle } from "../../Common";
-import { set } from "date-fns";
 
 export default function AttachmentModal() {
   const modalRef = useRef<ModalHandle>(null);

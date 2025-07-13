@@ -6,9 +6,8 @@ import { Modal, ModalHandle } from "../../Common";
 import { useClackState, getClackState, ClackEvents } from "../../../state";
 import { FilesToChatAttachments } from "../../../state/chat";
 
-export default function DragDropModal() {
+export default function DropModal() {
   const modalRef = useRef<ModalHandle>(null);
-  const boundaryCounter = useRef(0);
   const [isDragging, setIsDragging] = useState(false);
 
   const setAttachments = getClackState((state) => state.chat.setAttachments);
@@ -18,50 +17,47 @@ export default function DragDropModal() {
   );
 
   useEffect(() => {
-    const handleDragEnter = (e: DragEvent) => {
-      const isValid = e.dataTransfer.types.includes("Files");
-      boundaryCounter.current += 1;
-      if (!isValid) return;
+    const isValid = (e: DragEvent) => {
+      return e.dataTransfer.types.includes("Files");
+    };
+
+    const handleDragOver = (e: DragEvent) => {
+      if (!isValid(e)) return;
       e.preventDefault();
-      if (boundaryCounter.current === 1) {
+      e.dataTransfer.dropEffect = "copy";
+      if (!isDragging) {
         setIsDragging(true);
       }
     };
 
     const handleDragLeave = (e: DragEvent) => {
-      const isValid = e.dataTransfer.types.includes("Files");
-      boundaryCounter.current -= 1;
-      if (!isValid) return;
-      e.preventDefault();
-      if (boundaryCounter.current == 0) {
+      if (!isValid(e)) return;
+      if (
+        e.clientX <= 0 ||
+        e.clientY <= 0 ||
+        e.clientX >= window.innerWidth ||
+        e.clientY >= window.innerHeight
+      ) {
         modalRef.current?.close();
       }
     };
 
-    const handleDragOver = (e: DragEvent) => {
-      const isValid = e.dataTransfer.types.includes("Files");
-      if (!isValid) return;
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "copy";
-    };
-
     const handleDrop = (e: DragEvent) => {
+      if (!isValid(e)) return;
       e.preventDefault();
       const attachments = FilesToChatAttachments([...e.dataTransfer.files]);
       setAttachments(attachments, [], []);
-      boundaryCounter.current = 0;
+
       modalRef.current?.close();
     };
 
-    document.body.addEventListener("dragenter", handleDragEnter);
-    document.body.addEventListener("dragleave", handleDragLeave);
     document.body.addEventListener("dragover", handleDragOver);
+    document.body.addEventListener("dragleave", handleDragLeave);
     document.body.addEventListener("drop", handleDrop);
 
     return () => {
-      document.body.removeEventListener("dragenter", handleDragEnter);
-      document.body.removeEventListener("dragleave", handleDragLeave);
       document.body.removeEventListener("dragover", handleDragOver);
+      document.body.removeEventListener("dragleave", handleDragLeave);
       document.body.removeEventListener("drop", handleDrop);
     };
   }, [setIsDragging]);

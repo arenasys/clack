@@ -278,3 +278,13 @@ const rollRand = new Rand();
 export function Roll(min: number, max: number, gen: Rand = rollRand) {
   return Math.floor(gen.next() * (max - min)) + min;
 }
+
+export function NaturalList(items: string[], conjunction: string): string {
+  if (items.length === 0) return "";
+  if (items.length === 1) return items[0];
+  if (items.length === 2) return `${items[0]} ${conjunction} ${items[1]}`;
+
+  return `${items.slice(0, -1).join(", ")}, ${conjunction} ${
+    items[items.length - 1]
+  }`;
+}

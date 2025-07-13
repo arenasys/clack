@@ -6,11 +6,11 @@ import { Message } from "../../Message";
 
 import { ClickWrapper, Modal, ModalHandle } from "../../Common";
 
-export default function DeleteMessageModal() {
+export default function MessageDeleteModal() {
   const modalRef = useRef<ModalHandle>(null);
 
   const deleteModal = useClackState(
-    ClackEvents.deleteMessageModal,
+    ClackEvents.messageDeleteModal,
     (state) => state.gui.messageDeleteModal
   );
   const setDeleteModal = getClackState(

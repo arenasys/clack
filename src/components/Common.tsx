@@ -11,6 +11,8 @@ import {
 import { useClackState, getClackState, ClackEvents } from "../state";
 import { GetTooltipPosition } from "../util";
 import { point } from "slate";
+import { ErrorBoundary } from "react-error-boundary";
+import { FallbackModal } from "./Error";
 
 export function IconButton({
   children,
@@ -30,6 +32,9 @@ export function IconButton({
   const clearTooltipPopup = getClackState(
     (state) => state.gui.clearTooltipPopup
   );
+  const updateTooltipPopup = getClackState(
+    (state) => state.gui.updateTooltipPopup
+  );
 
   const tooltipIndexRef = useRef<number | null>(null);
 
@@ -43,15 +48,25 @@ export function IconButton({
         content: tooltip,
         direction: tooltipDirection,
         position: GetTooltipPosition(rect, tooltipDirection),
+        ref: ref.current,
       });
-      //console.log("SETTING TOOLTIP", tooltip, index);
       tooltipIndexRef.current = index;
     } else {
       if (tooltipIndexRef.current != null) {
         clearTooltipPopup(tooltipIndexRef.current);
       }
     }
-  }, [isHovered, tooltip]);
+  }, [isHovered]);
+
+  useEffect(() => {
+    if (tooltipIndexRef.current != null) {
+      if (tooltip) {
+        updateTooltipPopup(tooltipIndexRef.current, tooltip);
+      } else {
+        clearTooltipPopup(tooltipIndexRef.current);
+      }
+    }
+  }, [tooltip]);
 
   useEffect(() => {
     return () => {
@@ -273,7 +288,6 @@ export const Modal = forwardRef<ModalHandle, ModalProps>(
     return (
       <ClickWrapper
         onClick={() => {
-          console.log("CLOSING MODAL");
           doClose();
         }}
       >
@@ -282,7 +296,9 @@ export const Modal = forwardRef<ModalHandle, ModalProps>(
             isClosing ? "closing" : ""
           }`}
         >
-          {children}
+          <ErrorBoundary FallbackComponent={FallbackModal}>
+            {children}
+          </ErrorBoundary>
         </div>
       </ClickWrapper>
     );

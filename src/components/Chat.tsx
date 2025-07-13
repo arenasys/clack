@@ -43,7 +43,9 @@ export function Chat() {
   );
   useClackState(ClackEvents.anchor, () => {});
   const setAnchor = getClackState((state) => state.chat.setChatScroll);
-  const setTooltipPopup = getClackState((state) => state.gui.setTooltipPopup);
+  const scrolledTooltipPopup = getClackState(
+    (state) => state.gui.scrolledTooltipPopup
+  );
 
   /*function setAnchorTimeout(
     top: string,
@@ -76,7 +78,7 @@ export function Chat() {
       }}
       defaultBottom={true}
       onScroll={() => {
-        setTooltipPopup(undefined);
+        scrolledTooltipPopup();
       }}
     ></List>
   );

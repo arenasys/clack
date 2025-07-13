@@ -18,6 +18,7 @@ export function Fallback({
       <div
         className="error-boundary-copy"
         onClick={() => {
+          // This stack trace isnt sourcemapped, get the real trace from the console
           navigator.clipboard.writeText(error.stack ?? msg);
           setCopied(true);
         }}
@@ -40,6 +41,20 @@ export function FallbackLayer({
 }) {
   return (
     <div className="error-boundary-layer">
+      <Fallback error={error} resetErrorBoundary={resetErrorBoundary} />
+    </div>
+  );
+}
+
+export function FallbackModal({
+  error,
+  resetErrorBoundary,
+}: {
+  error: Error;
+  resetErrorBoundary: () => void;
+}) {
+  return (
+    <div className="error-boundary-modal">
       <Fallback error={error} resetErrorBoundary={resetErrorBoundary} />
     </div>
   );

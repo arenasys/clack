@@ -19,21 +19,21 @@ export default function ContextMenuPopup() {
     (state) => state.gui.setContextMenuPopup
   );
 
-  const [yourMessage, permissions] = useClackStateDynamic(
+  const [yourMessage, permissions, hasReactions] = useClackStateDynamic(
     (state, events) => {
       if (!contextMenuPopup) {
-        return [false, 0];
+        return [false, 0, false];
       }
 
       events.push(ClackEvents.current);
       if (!state.chat.currentUser) {
-        return [false, 0];
+        return [false, 0, false];
       }
 
       events.push(ClackEvents.message(contextMenuPopup.message));
       const message = state.chat.messages.get(contextMenuPopup.message);
       if (!message) {
-        return [false, 0];
+        return [false, 0, false];
       }
 
       events.push(ClackEvents.channel(message.channel));
@@ -42,6 +42,7 @@ export default function ContextMenuPopup() {
       return [
         state.chat.currentUser === message.author,
         state.chat.getPermissions(state.chat.currentUser, message.channel),
+        message.reactions && message.reactions.length > 0,
       ];
     },
     [contextMenuPopup]
@@ -59,6 +60,9 @@ export default function ContextMenuPopup() {
     (state) => state.gui.setMessageDeleteModal
   );
   const setReplyingTo = getClackState((state) => state.chat.setReplyingTo);
+  const setMessageReactionsModal = getClackState(
+    (state) => state.gui.setMessageReactionsModal
+  );
 
   if (contextMenuPopup == undefined) {
     return <></>;
@@ -122,9 +126,19 @@ export default function ContextMenuPopup() {
             </div>
           </div>
         )}
-        <div className="context-menu-entry">
-          <div className="context-menu-label">View Reactions</div>
-        </div>
+        {hasReactions && (
+          <div
+            className="context-menu-entry"
+            onClick={() => {
+              setMessageReactionsModal({
+                message: contextMenuPopup.message,
+              });
+              setContextMenuPopup(undefined);
+            }}
+          >
+            <div className="context-menu-label">View Reactions</div>
+          </div>
+        )}
         <div className="context-menu-divider" />
         {canReplyMessage && (
           <div
@@ -147,7 +161,18 @@ export default function ContextMenuPopup() {
             <div className="context-menu-label">Pin Message</div>
           </div>
         )}
-        <div className="context-menu-entry">
+        <div
+          className="context-menu-entry"
+          onClick={() => {
+            const message = getClackState((state) =>
+              state.chat.messages.get(contextMenuPopup.message)
+            );
+            if (message) {
+              navigator.clipboard.writeText(message.content);
+            }
+            setContextMenuPopup(undefined);
+          }}
+        >
           <div className="context-menu-label">Copy Text</div>
         </div>
         {canDeleteMessage && (
@@ -166,7 +191,13 @@ export default function ContextMenuPopup() {
           </div>
         )}
         <div className="context-menu-divider" />
-        <div className="context-menu-entry">
+        <div
+          className="context-menu-entry"
+          onClick={() => {
+            navigator.clipboard.writeText(contextMenuPopup.message);
+            setContextMenuPopup(undefined);
+          }}
+        >
           <div className="context-menu-label">Copy ID</div>
         </div>
       </div>
