@@ -104,7 +104,7 @@ export default function AttachmentModal() {
         <div className="modal-footer">
           <button
             className="attachment-modal-button button link"
-            onClick={modalRef.current?.close}
+            onClick={() => modalRef.current?.close()}
           >
             Cancel
           </button>

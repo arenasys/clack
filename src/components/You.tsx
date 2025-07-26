@@ -15,10 +15,11 @@ import {
   MdSettings,
 } from "react-icons/md";
 
-import { User, UserStatus } from "../types";
+import { User, UserPresence } from "../types";
 
 import { UserAvatarSVG } from "./Users";
-import { IconButton } from "./Common";
+import { IconButton, ClickWrapper } from "./Common";
+import { SettingsTab } from "../state/gui";
 
 export default function You() {
   const [muted, setMuted] = useState(false);
@@ -34,6 +35,12 @@ export default function You() {
   });
 
   const setTooltipPopup = getClackState((state) => state.gui.setTooltipPopup);
+  const setYouPopup = getClackState((state) => state.gui.setYouPopup);
+  const youPopup = useClackState(
+    ClackEvents.youPopup,
+    (state) => state.gui.youPopup
+  );
+  const setSettingsTab = getClackState((state) => state.gui.setSettingsTab);
 
   if (!user) {
     return <></>;
@@ -44,15 +51,27 @@ export default function You() {
       <div
         className={
           "you-entry clickable-button" +
-          (user.status == UserStatus.Offline ? " offline" : "")
+          (user.presence == UserPresence.Offline ? " offline" : "") +
+          (youPopup ? " active" : "")
         }
+        onClick={(e) => {
+          const rect = document
+            .getElementById("you-container")
+            .getBoundingClientRect();
+          setYouPopup({
+            position: {
+              x: rect.left + rect.width / 2,
+              y: rect.top - 8,
+            },
+          });
+        }}
       >
         <div className="you-avatar">
           <UserAvatarSVG user={user} size={40} />
         </div>
         <div className="you-details">
-          <div className="you-nickname">{user.nickname ?? user.username}</div>
-          <div className="you-username">{user.username}</div>
+          <div className="you-display-name">{user.displayName}</div>
+          <div className="you-user-name">{user.userName}</div>
         </div>
       </div>
 
@@ -76,7 +95,10 @@ export default function You() {
         )}
       </IconButton>
 
-      <IconButton tooltip="Settings">
+      <IconButton
+        tooltip="Settings"
+        onClick={() => setSettingsTab(SettingsTab.MyAccount)}
+      >
         <MdSettings className="icon" />
       </IconButton>
     </>

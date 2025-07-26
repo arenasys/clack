@@ -26,7 +26,7 @@ export default function ReactionTooltipPopup() {
       reaction.users
         .map((u) => state.chat.users.get(u))
         .filter((u) => u !== undefined)
-        .map((u) => u.nickname ?? u.username)
+        .map((u) => u.displayName)
         .slice(0, 3)
     );
 

@@ -150,6 +150,17 @@ export function FormatColor(color: number | undefined, alpha: number = 1.0) {
   return result;
 }
 
+export function ParseColor(color: string | undefined): number | undefined {
+  if (color == undefined) return undefined;
+  if (color.startsWith("#")) {
+    color = color.slice(1);
+  }
+  if (color.length === 6 || color.length === 8) {
+    return parseInt(color, 16);
+  }
+  return undefined;
+}
+
 const cookies = new Cookies(null, { path: "/" });
 
 export function GetCookie(name: string): string | undefined {
@@ -187,11 +198,15 @@ export function MakeSnowflake() {
   return (TIMESTAMP | MACHINE | COUNTER).toString();
 }
 
-export function ChooseFiles(): Promise<File[]> {
+export function ChooseFiles(
+  multiple: boolean = true,
+  accept: string = "*"
+): Promise<File[]> {
   return new Promise((resolve, reject) => {
     const input = document.createElement("input");
     input.type = "file";
-    input.multiple = true;
+    input.multiple = multiple;
+    input.accept = accept;
     input.addEventListener("change", () => {
       if (input.files) {
         resolve(Array.from(input.files));

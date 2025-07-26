@@ -226,6 +226,7 @@ export function Input() {
         setPlaintext(text.trim());
         setEditorState(JSON.stringify(value));
       }}
+      autoscroll
     />
   );
 
@@ -257,13 +258,11 @@ export function Input() {
             <span
               className="reply-to-name"
               style={{
-                color: FormatColor(replyingTo.author?.color),
+                color: FormatColor(replyingTo.author?.roleColor),
               }}
             >
               {" "}
-              {replyingTo.author?.nickname ??
-                replyingTo.author?.username ??
-                "Unknown"}
+              {replyingTo.author?.displayName ?? "Unknown"}
             </span>
           </span>
           <TooltipWrapper

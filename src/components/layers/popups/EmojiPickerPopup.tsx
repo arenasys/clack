@@ -843,7 +843,10 @@ export default function EmojiPickerPopup() {
             className={
               "emoji-picker-popup emoji-picker-popup-" +
               emojiPickerPopup.direction +
-              (flip ? " flip" : "")
+              (flip ? " flip" : "") +
+              (emojiPickerPopup.className
+                ? " " + emojiPickerPopup.className
+                : "")
             }
             style={{
               bottom: emojiPickerPopup.position.y,

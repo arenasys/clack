@@ -40,29 +40,54 @@ export class ClackEventsClass {
   public messageDeleteModal = `messageDeleteModal` as const;
   public messageReactionsModal = `messageReactionsModal` as const;
   public errorModal = `errorModal` as const;
+  public generalModal = `generalModal` as const;
+  public avatarModal = `avatarModal` as const;
   public viewerModal = `viewerModal` as const;
   public contextMenuPopup = `contextMenuPopup` as const;
   public emojiPickerPopup = `emojiPickerPopup` as const;
   public tooltipPopup = `tooltipPopup` as const;
   public reactionTooltipPopup = `reactionTooltipPopup` as const;
+  public youPopup = `youPopup` as const;
+  public colorPickerPopup = `colorPickerPopup` as const;
   public userPopup = `userPopup` as const;
   public editorFocus = `editorFocus` as const;
+  public settingsTab = `settingsTab` as const;
+  public reset = `reset` as const;
 }
 
 export const ClackEvents = new ClackEventsClass();
 export class ClackState {
-  chat: ChatState = new ChatState();
-  gui: GUIState = new GUIState();
+  chat: ChatState;
+  gui: GUIState;
+  eventBus: EventBus;
+  key: number = 0; // Used to force re-rendering of the app
+
+  initialize = () => {
+    this.chat = new ChatState();
+    this.gui = new GUIState();
+    this.eventBus = new EventBus();
+  };
+
+  reset = () => {
+    this.key += 1;
+    this.eventBus.emit(ClackEvents.reset);
+    this.eventBus.clear();
+
+    this.initialize();
+  };
+
+  constructor() {
+    this.initialize();
+  }
 }
 
-export const clackEventBus = new EventBus();
 export const clackState = new ClackState();
 
 export function useClackState<T>(
   eventKey: string,
   selector: (state: ClackState) => T
 ): T {
-  return useEventBus(clackEventBus, eventKey, () => {
+  return useEventBus(clackState.eventBus, eventKey, () => {
     return selector(clackState);
   });
 }
@@ -76,7 +101,7 @@ export function useClackStateDynamic<T>(
   deps: React.DependencyList = []
 ): T {
   return useEventBusDynamic(
-    clackEventBus,
+    clackState.eventBus,
     (events) => {
       return selector(clackState, events);
     },
@@ -86,7 +111,7 @@ export function useClackStateDynamic<T>(
 
 export function updateClackState(event: string): void {
   //console.log("EMIT", event);
-  clackEventBus.emit(event);
+  clackState.eventBus.emit(event);
 }
 
 export function updateClackStateConditional(

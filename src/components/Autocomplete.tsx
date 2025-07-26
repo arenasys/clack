@@ -68,7 +68,7 @@ export const Autocomplete = forwardRef(function Autocomplete(
     }
 
     if (userResults.length > 0 && index < userResults.length) {
-      return `@${userResults[index].username} `;
+      return `@${userResults[index].userName} `;
     }
 
     if (roleResults.length > 0) {
@@ -347,7 +347,7 @@ export const Autocomplete = forwardRef(function Autocomplete(
                 if (index != i) changeIndex(i, false);
               }}
               onClick={() => {
-                onComplete(word, `@${result.username} `);
+                onComplete(word, `@${result.userName} `);
               }}
             />
           );
@@ -476,8 +476,8 @@ function AutocompleteUser({
       <div className="autocomplete-icon user">
         <UserAvatarSVG user={user} size={30} />
       </div>
-      <div className="autocomplete-text">{user.nickname ?? user.username}</div>
-      <div className="autocomplete-subtext">{user.username}</div>
+      <div className="autocomplete-text">{user.displayName}</div>
+      <div className="autocomplete-subtext">{user.userName}</div>
     </div>
   );
 }

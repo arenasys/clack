@@ -235,8 +235,8 @@ export const codeBlockRule: SyntaxRule = {
     useEffect(() => {
       if (
         ref.current &&
-        lang &&
-        !ref.current.getAttribute("data-highlighted")
+        lang /* &&
+        !ref.current.getAttribute("data-highlighted")*/
       ) {
         if (hljs.getLanguage(lang)) {
           hljs.highlightElement(ref.current);
@@ -408,7 +408,7 @@ export const userMentionRule: SyntaxRule = {
               direction: "right",
             });
           }}
-        >{`@${user.nickname ?? user.username}`}</span>
+        >{`@${user.displayName}`}</span>
       );
     }
     return (

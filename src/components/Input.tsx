@@ -9,6 +9,7 @@ import React, {
   useRef,
   useImperativeHandle,
   forwardRef,
+  useState,
 } from "react";
 import {
   Slate,
@@ -54,6 +55,8 @@ import twemoji from "@twemoji/api";
 
 import { FormatColor } from "../util";
 import { User, Role, Channel } from "../types";
+import { RiEmotionFill } from "react-icons/ri";
+import { TooltipWrapper } from "./Common";
 
 type LineElement = {
   type: "line";
@@ -125,7 +128,7 @@ function ToPlaintext(element: InlineElement, type: PlaintextType): string {
       case "emoji":
         return `:${EmojiSymbolToName(element.emoji)}:`;
       case "userMention":
-        return `@${element.user.username}`;
+        return `@${element.user.userName}`;
       case "roleMention":
         return `@${element.role.name}`;
       case "channelMention":
@@ -137,7 +140,7 @@ function ToPlaintext(element: InlineElement, type: PlaintextType): string {
       case "emoji":
         return element.emoji;
       case "userMention":
-        return `@@${element.user.username} `;
+        return `@@${element.user.userName} `;
       case "roleMention":
         return `#@${element.role.name} `;
       case "channelMention":
@@ -575,7 +578,7 @@ export interface MarkdownTextboxRef {
   complete: (word: string, completion: string) => void;
   insert: (text: string) => void;
   setValue: (value: Descendant[]) => void;
-  focus: () => void;
+  focus: (atEnd?: boolean) => void;
   blur: () => void;
   capture: (e: KeyboardEvent) => void;
 }
@@ -584,10 +587,12 @@ export const MarkdownTextbox = forwardRef(function MarkdownTextbox(
   {
     value,
     placeholder,
+    autoscroll,
     onValue,
   }: {
     value?: string | Descendant[];
     placeholder?: string;
+    autoscroll?: boolean;
     onValue: (text: string, cursor: number, value: Descendant[]) => void;
   },
   ref
@@ -618,8 +623,11 @@ export const MarkdownTextbox = forwardRef(function MarkdownTextbox(
     setValue: (value: Descendant[]) => {
       setValue(value);
     },
-    focus: () => {
+    focus: (atEnd?: boolean) => {
       ReactEditor.focus(editor);
+      if (atEnd) {
+        Transforms.select(editor, Editor.end(editor, []));
+      }
     },
     blur: () => {
       ReactEditor.blur(editor);
@@ -824,6 +832,26 @@ export const MarkdownTextbox = forwardRef(function MarkdownTextbox(
     sendOnValue();
   });
 
+  function scrollSelectionIntoView(editor: ReactEditor) {
+    if (!editor.selection || !Range.isCollapsed(editor.selection)) return;
+    const domRange = ReactEditor.toDOMRange(editor, editor.selection);
+    if (domRange.getBoundingClientRect) {
+      const range = domRange.cloneRange();
+      range.collapse(true);
+
+      const spacer = document.createElement("span");
+      spacer.textContent = "\u200B"; // zero‑width space
+      spacer.style.display = "inline-block";
+      spacer.style.width = "0";
+      spacer.style.height = "1em";
+      spacer.style.margin = "8px";
+
+      range.insertNode(spacer);
+      spacer.scrollIntoView({ block: "nearest", inline: "nearest" });
+      spacer.remove();
+    }
+  }
+
   return (
     <div className="slate-editor">
       <Slate
@@ -879,7 +907,11 @@ export const MarkdownTextbox = forwardRef(function MarkdownTextbox(
               }
             }
           }}
-          scrollSelectionIntoView={() => {}}
+          scrollSelectionIntoView={(editor, domRange) => {
+            if (autoscroll) {
+              scrollSelectionIntoView(editor);
+            }
+          }}
         />
       </Slate>
     </div>
@@ -1010,7 +1042,7 @@ function CustomElement({
         onClick={onInlineClick}
       >
         {"@"}
-        {user.nickname ?? user.username}
+        {user.displayName}
         {children}
       </span>
     );
@@ -1054,3 +1086,125 @@ function CustomElement({
 
   return <span {...attributes}>{children}</span>;
 }
+
+export const MarkdownTextInput = forwardRef(function MarkdownTextInput(
+  {
+    value,
+    onValue,
+    placeholder,
+    maxLength,
+    className,
+    innerClassName,
+  }: {
+    value?: string;
+    onValue?: (text: string, cursor: number, value: Descendant[]) => void;
+    placeholder?: string;
+    maxLength?: number;
+    className?: string;
+    innerClassName?: string;
+  },
+  ref
+) {
+  const containerRef = useRef<HTMLDivElement>();
+  const innerRef = useRef<HTMLDivElement>();
+  const textboxRef = useRef<MarkdownTextboxRef>();
+  const [length, setLength] = useState(0);
+  const remaining = maxLength != undefined ? maxLength - length : -1;
+
+  useImperativeHandle(ref, () => ({
+    clear: () => {
+      textboxRef.current?.clear();
+    },
+    complete: (word: string, completion: string) => {
+      textboxRef.current?.complete(word, completion);
+    },
+    insert: (text: string) => {
+      textboxRef.current?.insert(text);
+    },
+    setValue: (value: Descendant[]) => {
+      textboxRef.current?.setValue(value);
+    },
+    focus: (atEnd?: boolean) => {
+      textboxRef.current?.focus(atEnd);
+    },
+    blur: () => {
+      textboxRef.current?.blur();
+    },
+    capture: (e: KeyboardEvent) => {
+      textboxRef.current?.capture(e);
+    },
+  }));
+
+  const setEmojiPickerPopup = getClackState(
+    (state) => state.gui.setEmojiPickerPopup
+  );
+
+  return (
+    <div
+      ref={containerRef}
+      className={"markdown-text-input " + (className ? className : "")}
+    >
+      <div
+        ref={innerRef}
+        className={
+          "markdown-text-input-inner thin-scrollbar " +
+          (innerClassName ? innerClassName : "")
+        }
+        onClick={(e) => {
+          if (e.target !== innerRef.current) return;
+          textboxRef.current?.focus(true);
+          e.stopPropagation();
+        }}
+      >
+        <MarkdownTextbox
+          ref={textboxRef}
+          value={value}
+          onValue={(text, cursor, value) => {
+            setLength(text.length);
+            if (onValue) {
+              onValue(text, cursor, value);
+            }
+          }}
+          autoscroll
+        />
+      </div>
+      <div
+        className="markdown-text-input-emoji"
+        onClick={() => {
+          const rect = containerRef.current.getBoundingClientRect();
+          var altPos = false;
+          var x = rect.right;
+          var y = rect.top;
+          var className = "mini";
+          if (rect.right > window.innerWidth - 500) {
+            altPos = true;
+            y -= 8;
+          } else {
+            x += 8;
+            className += " flip-h";
+          }
+
+          setEmojiPickerPopup({
+            position: { x: x, y: y },
+            direction: "top",
+            className: className,
+            onClose: () => {},
+            onPick: (id, text) => {
+              textboxRef.current?.insert(text + " ");
+              textboxRef.current?.focus();
+            },
+          });
+        }}
+      >
+        <RiEmotionFill />
+      </div>
+      {maxLength != undefined && (
+        <div className="markdown-text-input-counter">
+          <TooltipWrapper tooltip={`${remaining} characters remaining`}>
+            {remaining}
+          </TooltipWrapper>
+        </div>
+      )}
+    </div>
+  );
+});

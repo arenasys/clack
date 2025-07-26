@@ -3,10 +3,12 @@ import { FormatColor } from "../util";
 
 import { useRef } from "react";
 
-import { User, UserStatus } from "../types";
+import { User, UserPresence } from "../types";
+import { EmojiContent, SyntaxContent } from "../syntax";
 import Rand from "rand-seed";
 
 import List from "./List";
+import { avatarDisplayURL, avatarPreviewURL } from "../state/chat";
 
 const userEntryHeight = 45;
 const userGroupHeight = 41;
@@ -25,7 +27,7 @@ const maskAvatar = (
   </>
 );
 
-const maskAvatarStatus = (
+const maskAvatarPresence = (
   <>
     <rect
       fill="white"
@@ -40,7 +42,7 @@ const maskAvatarStatus = (
   </>
 );
 
-const maskAvatarStatusBig = (
+const maskAvatarPresenceBig = (
   <>
     <rect
       fill="white"
@@ -68,10 +70,30 @@ const maskAway = (
     <circle fill="black" cx="3" cy="3" r="4.5"></circle>
   </>
 );
+const maskDontDisturb = (
+  <>
+    <circle fill="white" cx="6" cy="6" r="6"></circle>
+    <rect fill="black" x="1.5" y="4" width="9" height="4" rx="3" ry="3"></rect>
+  </>
+);
+
+const presenceMasks = {
+  [UserPresence.Online]: maskOnline,
+  [UserPresence.Offline]: maskOffline,
+  [UserPresence.Away]: maskAway,
+  [UserPresence.DontDisturb]: maskDontDisturb,
+};
+
+const presenceNames = {
+  [UserPresence.Online]: "online",
+  [UserPresence.Offline]: "offline",
+  [UserPresence.Away]: "away",
+  [UserPresence.DontDisturb]: "dont-disturb",
+};
 
 export function UserAvatarSVG({ user, size }: { user: User; size: number }) {
-  var statusName = ["offline", "online", "away"][user.status];
-  var statusMask = [maskOffline, maskOnline, maskAway][user.status];
+  var presenceName = presenceNames[user.presence];
+  var presenceMask = presenceMasks[user.presence];
 
   return (
     <svg
@@ -80,9 +102,9 @@ export function UserAvatarSVG({ user, size }: { user: User; size: number }) {
       viewBox="0 0 40 40"
       className="user-avatar-svg"
     >
-      <mask id="avatar-status-mask">
+      <mask id="avatar-presence-mask">
         <svg x="0" y="0" width="32" height="32" viewBox="0 0 40 40">
-          {maskAvatarStatus}
+          {maskAvatarPresence}
         </svg>
       </mask>
       <image
@@ -90,30 +112,30 @@ export function UserAvatarSVG({ user, size }: { user: User; size: number }) {
         y="0"
         width="32"
         height="32"
-        href="/avatar.png"
-        mask="url(#avatar-status-mask)"
+        href={avatarPreviewURL(user)}
+        mask="url(#avatar-presence-mask)"
       />
 
-      <mask id={"avatar-status-mask-" + statusName}>
+      <mask id={"avatar-presence-mask-" + presenceName}>
         <svg x="22" y="22" width="10" height="10" viewBox="0 0 12 12">
-          {statusMask}
+          {presenceMask}
         </svg>
       </mask>
       <rect
-        className={statusName}
+        className={presenceName}
         x="22"
         y="22"
         width="10"
         height="10"
-        mask={`url(#${"avatar-status-mask-" + statusName})`}
+        mask={`url(#${"avatar-presence-mask-" + presenceName})`}
       />
     </svg>
   );
 }
 
 export function UserAvatarBigSVG({ user, size }: { user: User; size: number }) {
-  var statusName = ["offline", "online", "away"][user.status];
-  var statusMask = [maskOffline, maskOnline, maskAway][user.status];
+  var presenceName = presenceNames[user.presence];
+  var presenceMask = presenceMasks[user.presence];
 
   return (
     <svg
@@ -122,9 +144,9 @@ export function UserAvatarBigSVG({ user, size }: { user: User; size: number }) {
       viewBox="0 0 100 100"
       className="user-avatar-svg"
     >
-      <mask id="avatar-status-mask-big">
+      <mask id="avatar-presence-mask-big">
         <svg x="0" y="0" width="80" height="80" viewBox="0 0 40 40">
-          {maskAvatarStatusBig}
+          {maskAvatarPresenceBig}
         </svg>
       </mask>
       <image
@@ -132,28 +154,28 @@ export function UserAvatarBigSVG({ user, size }: { user: User; size: number }) {
         y="0"
         width="80"
         height="80"
-        href="/avatar.png"
-        mask="url(#avatar-status-mask-big)"
+        href={avatarDisplayURL(user)}
+        mask="url(#avatar-presence-mask-big)"
       />
 
-      <mask id={"avatar-status-mask-" + statusName + "-big"}>
+      <mask id={"avatar-presence-mask-" + presenceName + "-big"}>
         <svg x="60" y="60" width="16" height="16" viewBox="0 0 12 12">
-          {statusMask}
+          {presenceMask}
         </svg>
       </mask>
       <rect
-        className={statusName}
+        className={presenceName}
         x="60"
         y="60"
         width="16"
         height="16"
-        mask={`url(#${"avatar-status-mask-" + statusName + "-big"})`}
+        mask={`url(#${"avatar-presence-mask-" + presenceName + "-big"})`}
       />
     </svg>
   );
 }
 
-export function UserAvatarSimple({ id, size }: { id: string; size: number }) {
+export function UserAvatarSimple({ user, size }: { user: User; size: number }) {
   return (
     <svg
       width={size}
@@ -171,7 +193,7 @@ export function UserAvatarSimple({ id, size }: { id: string; size: number }) {
         y="0"
         width="40"
         height="40"
-        href="/avatar.png"
+        href={avatarPreviewURL(user)}
         mask="url(#avatar-mask)"
       />
     </svg>
@@ -183,6 +205,37 @@ function UserAvatar({ user }: { user: User }) {
     <div className="user-avatar">
       <UserAvatarSVG user={user} size={40} />
     </div>
+  );
+}
+
+export function UserPresenceIcon({
+  presence,
+  className,
+}: {
+  presence: UserPresence;
+  className?: string;
+}) {
+  var presenceName = presenceNames[presence];
+  var presenceMask = presenceMasks[presence];
+
+  return (
+    <svg viewBox="0 0 12 12" className={`user-avatar-svg ${className ?? ""}`}>
+      <mask id={"presence-icon-mask-" + presenceName}>
+        <svg x="0" y="0" width="12" height="12" viewBox="0 0 12 12">
+          {presenceMask}
+        </svg>
+      </mask>
+      <rect
+        x="0"
+        y="0"
+        width="12"
+        height="12"
+        rx="6"
+        ry="6"
+        className={presenceName}
+        mask={`url(#${"presence-icon-mask-" + presenceName})`}
+      ></rect>
+    </svg>
   );
 }
 
@@ -217,7 +270,7 @@ export function UserEntry({ id, idx }: { id: string; idx: number }) {
       ref={ref}
       className={
         "user-entry clickable-button" +
-        (user.status == UserStatus.Offline ? " offline" : "")
+        (user.presence == UserPresence.Offline ? " offline" : "")
       }
       onClick={(e) => {
         var rect = ref.current!.getBoundingClientRect();
@@ -235,13 +288,18 @@ export function UserEntry({ id, idx }: { id: string; idx: number }) {
       <UserAvatar user={user} />
       <div className="user-details">
         <div
-          className="user-username"
+          className="user-display-name"
           style={{
-            color: FormatColor(user.color),
+            color: FormatColor(user.roleColor),
           }}
         >
-          {user.nickname ?? user.username}
+          {user.displayName}
         </div>
+        {user.statusMessage && (
+          <div className="user-status-message">
+            <EmojiContent text={user.statusMessage} />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -250,9 +308,9 @@ export function UserEntry({ id, idx }: { id: string; idx: number }) {
 function UserGroup({ id, count }: { id: string; count: number }) {
   const userGroup = useClackState(ClackEvents.role(id), (state) => {
     var name = "";
-    if (id == String(UserStatus.Online)) {
+    if (id == String(UserPresence.Online)) {
       name = "Online";
-    } else if (id == String(UserStatus.Offline)) {
+    } else if (id == String(UserPresence.Offline)) {
       name = "Offline";
     } else {
       var role = state.chat.roles.get(id);

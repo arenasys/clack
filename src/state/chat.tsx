@@ -33,6 +33,11 @@ import {
   ReactionAddEvent,
   ReactionDeleteEvent,
   ReactionUsersResponse,
+  UploadSlotResponse,
+  UserUpdateRequest,
+  UserAddEvent,
+  UserDeleteEvent,
+  UserUpdateEvent,
 } from "../types";
 
 import { dequal } from "dequal";
@@ -42,6 +47,7 @@ import { EmojiSearchByPartialName } from "../emoji";
 
 import {
   ClackEvents,
+  getClackState,
   updateClackState,
   updateClackStateConditional,
 } from "../state";
@@ -52,8 +58,6 @@ const previewURL = (message_id: Snowflake, id: Snowflake) =>
   `http://${window.location.host}/previews/${message_id}/${id}?type=thumbnail`;
 const displayURL = (message_id: Snowflake, id: Snowflake) =>
   `http://${window.location.host}/previews/${message_id}/${id}?type=display`;
-const animatedURL = (message_id: Snowflake, id: Snowflake) =>
-  `http://${window.location.host}/previews/${message_id}/${id}?type=animated`;
 const originalURL = (message_id: Snowflake, id: Snowflake, filename: string) =>
   `http://${window.location.host}/attachments/${message_id}/${id}/${filename}`;
 const proxyURL = (message_id: Snowflake, id: Snowflake, url: string) =>
@@ -62,6 +66,26 @@ const proxyURL = (message_id: Snowflake, id: Snowflake, url: string) =>
   }/external/${message_id}/${id}?url=${encodeURIComponent(url)}`;
 const uploadURL = (slot: Snowflake) =>
   `http://${window.location.host}/upload/${slot}`;
+
+export const avatarPreviewURL = (user: User) => {
+  if (user.avatarURL) {
+    return user.avatarURL;
+  }
+  if (user.avatarModified == 0) {
+    return `http://${window.location.host}/avatar.png`;
+  }
+  return `http://${window.location.host}/avatars/${user.id}/${user.avatarModified}?type=thumbnail`;
+};
+
+export const avatarDisplayURL = (user: User) => {
+  if (user.avatarURL) {
+    return user.avatarURL;
+  }
+  if (user.avatarModified == 0) {
+    return `http://${window.location.host}/avatar.png`;
+  }
+  return `http://${window.location.host}/avatars/${user.id}/${user.avatarModified}?type=display`;
+};
 
 export interface ChatChannelGroup {
   category?: Snowflake;
@@ -435,6 +459,33 @@ interface PendingMessage {
   request?: XMLHttpRequest;
 }
 
+interface PendingAvatar {
+  marker: Snowflake;
+  data: Blob;
+}
+
+function FilesToForm(
+  blobs: Blob[],
+  filenames: string[],
+  metadata?: Record<string, any>[]
+) {
+  const form = new FormData();
+  blobs.forEach((b, i) => {
+    const f = filenames[i];
+    var m = {
+      filename: f,
+      size: b.size,
+    };
+    if (metadata && metadata[i]) {
+      m = { ...m, ...metadata[i] };
+    }
+
+    form.append(`metadata_${i}`, JSON.stringify(m));
+    form.append(`file_${i}`, b, f);
+  });
+  return form;
+}
+
 export const enum ChatAuthState {
   Disconnected = 0,
   Login = 1,
@@ -476,6 +527,7 @@ export class ChatState {
   currentJumpToPresent: boolean = false;
 
   pendingMessages: Map<Snowflake, PendingMessage> = new Map();
+  pendingAvatar: PendingAvatar | undefined = undefined;
 
   userAnchor?: Snowflake = undefined;
 
@@ -492,6 +544,11 @@ export class ChatState {
     } else {
       this.pushRequest(event);
     }
+  };
+
+  logout = () => {
+    localStorage.removeItem("token");
+    this.switchAuthState(ChatAuthState.Disconnected);
   };
 
   register = (
@@ -906,32 +963,43 @@ export class ChatState {
   onSendMessageResponse = (msg: MessageSendResponse, seq: Snowflake) => {
     const pending = this.pendingMessages.get(seq);
     if (!pending) return;
-    if (msg.slot) {
-      const form = new FormData();
-      pending.attachments!.forEach((att, i) => {
-        form.append(
-          `metadata_${i}`,
-          JSON.stringify({
-            filename: att.filename,
-            spoilered: att.spoilered,
-            size: att.file.size,
-          })
-        );
-        form.append(`file_${i}`, att.file, att.filename);
-      });
-      const xhr = new XMLHttpRequest();
-      xhr.open("POST", uploadURL(msg.slot), true);
-      xhr.upload.addEventListener("progress", (e) => {
-        if (e.lengthComputable) pending.progress = (e.loaded / e.total) * 100;
-      });
-      xhr.addEventListener("load", () =>
-        console.log("Upload complete", xhr.status)
-      );
-      xhr.addEventListener("error", () => console.error("Upload failed"));
-      xhr.send(form);
-      pending.request = xhr;
-    } else {
-      pending.message = msg.message;
+    pending.message = msg.message;
+  };
+
+  onSendMessageUploadSlot = (slot: Snowflake, seq: Snowflake) => {
+    const pending = this.pendingMessages.get(seq);
+    const attachments = pending?.attachments;
+
+    if (!pending || !attachments || attachments.length === 0) return;
+
+    const form = FilesToForm(
+      attachments.map((att) => att.file),
+      attachments.map((att) => att.filename),
+      attachments.map((att) => ({
+        spoilered: att.spoilered,
+      }))
+    );
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", uploadURL(slot), true);
+    xhr.upload.addEventListener("progress", (e) => {
+      if (e.lengthComputable) pending.progress = (e.loaded / e.total) * 100;
+    });
+    xhr.addEventListener("load", () =>
+      console.log("Upload complete", xhr.status)
+    );
+    xhr.addEventListener("error", () => console.error("Upload failed"));
+    xhr.send(form);
+    pending.request = xhr;
+  };
+
+  onUploadSlot = (msg: UploadSlotResponse, seq: Snowflake) => {
+    console.log("UPLOAD SLOT", msg, seq);
+    if (this.pendingMessages.has(seq)) {
+      this.onSendMessageUploadSlot(msg.slot, seq);
+    }
+    if (this.pendingAvatar?.marker == seq) {
+      this.onUserUpdateSlot(msg.slot, seq);
     }
   };
 
@@ -1006,6 +1074,68 @@ export class ChatState {
     });
   };
 
+  updateUser = (user: User, avatar?: Blob) => {
+    var current = this.users.get(user.id)!;
+
+    const avatarModified = user.avatarModified !== current.avatarModified;
+    const profileModified =
+      user.statusMessage !== current.statusMessage ||
+      user.profileMessage !== current.profileMessage ||
+      user.profileColor !== current.profileColor;
+    const nameModified = user.displayName !== current.displayName;
+
+    var request: UserUpdateRequest = {
+      user: user.id,
+      setAvatar: avatarModified,
+      setProfile: profileModified,
+      setName: nameModified,
+    };
+
+    if (profileModified) {
+      request.statusMessage = user.statusMessage;
+      request.profileMessage = user.profileMessage;
+      request.profileColor = user.profileColor;
+    }
+
+    if (nameModified) {
+      request.displayName = user.displayName;
+    }
+
+    if (avatarModified) {
+      request.avatarModified = user.avatarModified;
+    }
+
+    console.log("UPDATE USER", request, user, current);
+
+    if (avatarModified && avatar) {
+      const marker = MakeSnowflake();
+
+      this.pendingAvatar = {
+        marker: marker,
+        data: avatar,
+      };
+
+      this.pushRequest({
+        type: EventType.UserUpdate,
+        seq: marker,
+        data: request,
+      });
+    } else {
+      this.pushRequest({
+        type: EventType.UserUpdate,
+        data: request,
+      });
+    }
+  };
+
+  onUserUpdateSlot = (slot: Snowflake, seq: Snowflake) => {
+    const form = FilesToForm([this.pendingAvatar!.data], ["avatar.png"]);
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", uploadURL(slot), true);
+    xhr.addEventListener("error", () => console.error("Upload failed"));
+    xhr.send(form);
+  };
+
   onOverview = (msg: OverviewResponse) => {
     this.processRoles(msg.roles);
     this.processChannels(msg.channels);
@@ -1048,7 +1178,12 @@ export class ChatState {
       return this.switchAuthState(ChatAuthState.Register, msg);
     if (msg.code === ErrorCode.InvalidToken)
       return this.switchAuthState(ChatAuthState.Loading);
-    this.error = msg;
+
+    const setErrorModal = getClackState((state) => state.gui.setErrorModal);
+    setErrorModal({
+      error: msg,
+    });
+    updateClackState(ClackEvents.errorModal);
   };
 
   switchAuthState = (authState: ChatAuthState, error?: ErrorResponse) => {
@@ -1104,7 +1239,7 @@ export class ChatState {
           pos = r.position;
         }
       });
-      user.color = color;
+      user.roleColor = color;
       this.users.set(user.id, user);
       updateClackStateConditional(ClackEvents.user(user.id), oldUser, user);
     });
@@ -1291,6 +1426,15 @@ export class ChatState {
     updateClackState(ClackEvents.userList);
   };
 
+  onUserAdd = (msg: UserAddEvent) => {};
+
+  onUserDelete = (msg: UserDeleteEvent) => {};
+
+  onUserUpdate = (msg: UserUpdateEvent) => {
+    console.log("ON USER UPDATE", msg);
+    this.processUsers([msg.user]);
+  };
+
   searchEmojis = (query: string): Emoji[] => {
     if (query.length <= 1 || !/^[a-z0-9_]+$/.test(query)) return [];
     return EmojiSearchByPartialName(query)
@@ -1302,11 +1446,11 @@ export class ChatState {
     const lower = query.toLowerCase();
     const scored: { user: User; score: number }[] = [];
     this.users.forEach((user) => {
-      const uname = user.username.toLowerCase();
-      const nick = user.nickname?.toLowerCase() || "";
+      const uname = user.userName.toLowerCase();
+      const dname = user.displayName.toLowerCase();
       const score = Math.max(
         fuzzysort.single(lower, uname)?.score || 0,
-        fuzzysort.single(lower, nick)?.score || 0
+        fuzzysort.single(lower, dname)?.score || 0
       );
       if (score > 0 || query.length === 0) scored.push({ user, score });
     });
@@ -1340,7 +1484,7 @@ export class ChatState {
     if (id) return this.users.get(id);
     if (name)
       return [...this.users.values()].find(
-        (u) => u.username === name || u.nickname === name
+        (u) => u.userName === name || u.displayName === name
       );
   };
 
@@ -1390,9 +1534,9 @@ export class ChatState {
     else if (msg.type === EventType.UserListResponse) this.onUserList(msg.data);
     else if (msg.type === EventType.MessageSendResponse)
       this.onSendMessageResponse(msg.data, msg.seq);
+    else if (msg.type === EventType.MessageAdd) this.onMessageAdd(msg.data);
     else if (msg.type === EventType.MessageDelete)
       this.onMessageDelete(msg.data);
-    else if (msg.type === EventType.MessageAdd) this.onMessageAdd(msg.data);
     else if (msg.type === EventType.MessageUpdate)
       this.onMessageUpdate(msg.data);
     else if (msg.type === EventType.MessageReactionAdd)
@@ -1401,6 +1545,11 @@ export class ChatState {
       this.onReactionDelete(msg.data);
     else if (msg.type === EventType.MessageReactionUsersResponse)
       this.onReactionUsers(msg.data);
+    else if (msg.type === EventType.UserAdd) this.onUserAdd(msg.data);
+    else if (msg.type === EventType.UserDelete) this.onUserDelete(msg.data);
+    else if (msg.type === EventType.UserUpdate) this.onUserUpdate(msg.data);
+    else if (msg.type === EventType.UploadSlot)
+      this.onUploadSlot(msg.data, msg.seq);
     else if (msg.type === EventType.ErrorResponse) this.onError(msg.data);
   };
 }

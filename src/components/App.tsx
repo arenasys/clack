@@ -11,25 +11,35 @@ import ViewerModal from "./layers/modals/ViewerModal";
 import MessageDeleteModal from "./layers/modals/MessageDeleteModal";
 import MessageReactionsModal from "./layers/modals/MessageReactionsModal";
 import ErrorModal from "./layers/modals/ErrorModal";
+import GeneralModal from "./layers/modals/GeneralModal";
 import DropModal from "./layers/modals/DropModal";
 
 import TooltipPopup from "./layers/popups/TooltipPopup";
 import ContextMenuPopup from "./layers/popups/ContextMenuPopup";
 import UserPopup from "./layers/popups/UserPopup";
+import ReactionTooltipPopup from "./layers/popups/ReactionTooltipPopup";
+import YouPopup from "./layers/popups/YouPopup";
 import EmojiPickerPopup from "./layers/popups/EmojiPickerPopup";
+import ColorPickerPopup from "./layers/popups/ColorPickerPopup";
 
 import LoadingScreen from "./layers/LoadingScreen";
 import LoginScreen from "./layers/LoginScreen";
 import CaptchaScreen from "./layers/CaptchaScreen";
+import SettingsScreen from "./layers/SettingsScreen";
 
 import { RiArrowDownSLine } from "react-icons/ri";
 import { ErrorBoundary } from "react-error-boundary";
 import { Fallback, FallbackLayer } from "./Error";
-import ReactionTooltipPopup from "./layers/popups/ReactionTooltipPopup";
+import { ClackEvents, useClackState } from "../state";
+import AvatarModal from "./layers/modals/AvatarModal";
 
 function App() {
+  const key = useClackState(ClackEvents.reset, (state) => {
+    return state.key;
+  });
+
   return (
-    <div id="root">
+    <div id="root" key={key}>
       <Client />
       <div className="monospace-preload">Clack</div>
       <div id="sidebar-container"></div>
@@ -87,6 +97,10 @@ function App() {
       </ErrorBoundary>
 
       <ErrorBoundary FallbackComponent={FallbackLayer}>
+        <YouPopup />
+      </ErrorBoundary>
+
+      <ErrorBoundary FallbackComponent={FallbackLayer}>
         <AttachmentModal />
       </ErrorBoundary>
 
@@ -111,7 +125,19 @@ function App() {
       </ErrorBoundary>
 
       <ErrorBoundary FallbackComponent={FallbackLayer}>
+        <SettingsScreen />
+      </ErrorBoundary>
+
+      <ErrorBoundary FallbackComponent={FallbackLayer}>
+        <LoginScreen />
+      </ErrorBoundary>
+
+      <ErrorBoundary FallbackComponent={FallbackLayer}>
         <EmojiPickerPopup />
+      </ErrorBoundary>
+
+      <ErrorBoundary FallbackComponent={FallbackLayer}>
+        <ColorPickerPopup />
       </ErrorBoundary>
 
       <ErrorBoundary FallbackComponent={FallbackLayer}>
@@ -119,7 +145,11 @@ function App() {
       </ErrorBoundary>
 
       <ErrorBoundary FallbackComponent={FallbackLayer}>
-        <LoginScreen />
+        <GeneralModal />
+      </ErrorBoundary>
+
+      <ErrorBoundary FallbackComponent={FallbackLayer}>
+        <AvatarModal />
       </ErrorBoundary>
 
       <ErrorBoundary FallbackComponent={FallbackLayer}>

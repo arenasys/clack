@@ -127,10 +127,10 @@ export default function MessageReactionsModal() {
             const user = users[index];
             return (
               <div key={user.id} className="reactions-modal-user-entry">
-                <UserAvatarSimple id={user.id} size={24} />
-                <span className="nickname">
-                  {user.nickname ?? user.username}
-                  <span className="username">{user.username}</span>
+                <UserAvatarSimple user={user} size={24} />
+                <span className="display-name">
+                  {user.displayName}
+                  <span className="user-name">{user.userName}</span>
                 </span>
               </div>
             );

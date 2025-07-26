@@ -13,6 +13,8 @@ import { GetTooltipPosition } from "../util";
 import { point } from "slate";
 import { ErrorBoundary } from "react-error-boundary";
 import { FallbackModal } from "./Error";
+import { MarkdownTextbox, MarkdownTextboxRef } from "./Input";
+import { RiEmotionFill } from "react-icons/ri";
 
 export function IconButton({
   children,
@@ -250,15 +252,18 @@ interface ModalProps {
   onClosing: () => void;
   onClosed: () => void;
   closingTime?: number;
+  modalType?: string;
   children: ReactNode;
 }
 
 export interface ModalHandle {
   close: () => void;
+  focus: () => void;
 }
 
 export const Modal = forwardRef<ModalHandle, ModalProps>(
-  ({ onClosing, onClosed, closingTime, children }, ref) => {
+  ({ onClosing, onClosed, closingTime, modalType, children }, ref) => {
+    const containerDiv = useRef<HTMLDivElement>(null);
     const [isClosing, setIsClosing] = useState(false);
     const closingTimeout = useRef<number | undefined>(undefined);
 
@@ -283,7 +288,38 @@ export const Modal = forwardRef<ModalHandle, ModalProps>(
       close: () => {
         doClose();
       },
+      focus: () => {
+        if (containerDiv.current) {
+          console.log("FOCUSING MODAL B", children);
+          containerDiv.current.focus();
+        }
+      },
     }));
+
+    useEffect(() => {
+      if (containerDiv.current) {
+        console.log("FOCUSING MODAL A", children);
+        containerDiv.current.focus();
+      }
+
+      function handleKeyDown(e: KeyboardEvent) {
+        if (e.key === "Escape") {
+          if (!e.defaultPrevented && e.target == containerDiv.current) {
+            console.log("ESCAPE PRESSED ON MODAL", e.target);
+            e.preventDefault();
+            e.stopPropagation();
+            doClose();
+          }
+        }
+      }
+      window.addEventListener("keydown", handleKeyDown, { capture: true });
+
+      return () => {
+        window.removeEventListener("keydown", handleKeyDown, { capture: true });
+      };
+    }, []);
+
+    const modalTypeClass = modalType ? `modal-${modalType}` : "modal-popup";
 
     return (
       <ClickWrapper
@@ -292,9 +328,11 @@ export const Modal = forwardRef<ModalHandle, ModalProps>(
         }}
       >
         <div
-          className={`layer-container layer-popup modal-background ${
+          ref={containerDiv}
+          className={`layer-container layer-popup modal-background ${modalTypeClass} ${
             isClosing ? "closing" : ""
           }`}
+          tabIndex={-1}
         >
           <ErrorBoundary FallbackComponent={FallbackModal}>
             {children}
@@ -304,6 +342,82 @@ export const Modal = forwardRef<ModalHandle, ModalProps>(
     );
   }
 );
+
+export function SliderInput({
+  value,
+  onChange,
+  min = 0,
+  max = 100,
+  step = 1,
+  className = "",
+}: {
+  value: number;
+  onChange: (value: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+  className?: string;
+}) {
+  const sliderRef = useRef<HTMLDivElement>(null);
+  const dragging = useRef(false);
+
+  const clampAndStep = (raw: number) => {
+    const clamped = Math.min(max, Math.max(min, raw));
+    return Math.round(clamped / step) * step;
+  };
+
+  const updateValueFromPosition = (clientX: number) => {
+    if (!sliderRef.current) return;
+    const { left, width } = sliderRef.current.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(1, (clientX - left) / width));
+    const newValue = clampAndStep(min + pct * (max - min));
+    onChange(newValue);
+  };
+
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (dragging.current) {
+        updateValueFromPosition(e.clientX);
+      }
+    };
+    const onMouseUp = () => {
+      dragging.current = false;
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+  }, [min, max, step, onChange]);
+
+  useEffect(() => {
+    const v = clampAndStep(value);
+    if (v !== value) {
+      onChange(v);
+    }
+  }, [value]);
+
+  const v = clampAndStep(value);
+  const progress = `${((v - min) / (max - min)) * 100}%`;
+
+  return (
+    <div
+      ref={sliderRef}
+      className={`slider-input ${className}`}
+      onMouseDown={(e) => {
+        dragging.current = true;
+        updateValueFromPosition(e.clientX);
+      }}
+    >
+      <div className="track">
+        <div className="fill" style={{ width: progress }} />
+      </div>
+      <div className="handle" style={{ left: progress }} />
+    </div>
+  );
+}
 
 export function fadeMedia(media: HTMLMediaElement | null) {
   if (!media || media.paused) return;

@@ -5,6 +5,7 @@ import { useClackState, getClackState, ClackEvents } from "../../../state";
 import { Modal, ModalHandle } from "../../Common";
 
 import { ErrorCodeMessages, EventTypeDescriptions } from "../../../types";
+import { GeneralModalContent } from "./GeneralModal";
 
 export default function ErrorModal() {
   const modalRef = useRef<ModalHandle>(null);
@@ -19,10 +20,17 @@ export default function ErrorModal() {
     return <></>;
   }
 
-  const title = `Error ${errorModal.error.code}(${errorModal.error.request})`;
+  var title: string;
+  var message: string;
 
-  const errorMessage =
-    ErrorCodeMessages[errorModal.error.code] || "An unknown error occurred.";
+  if (typeof errorModal.error === "string") {
+    title = "Error";
+    message = errorModal.error;
+  } else {
+    title = `Error ${errorModal.error.code}(${errorModal.error.request})`;
+    message =
+      ErrorCodeMessages[errorModal.error.code] || "An unknown error occurred.";
+  }
 
   return (
     <Modal
@@ -33,27 +41,16 @@ export default function ErrorModal() {
       }}
       closingTime={250}
     >
-      <div
-        className="error-modal modal-container"
-        onClick={(e) => {
-          e.stopPropagation();
+      <GeneralModalContent
+        modalRef={modalRef}
+        onClose={() => {
+          modalRef.current?.close();
         }}
-      >
-        <div className="modal-content">
-          <div className="title ">{title}</div>
-          {errorMessage}
-        </div>
-        <div className="modal-footer">
-          <button
-            className="button"
-            onClick={() => {
-              modalRef.current?.close();
-            }}
-          >
-            Ok
-          </button>
-        </div>
-      </div>
+        className="error-modal"
+        title={title}
+        description={message}
+        closeLabel="Ok"
+      />
     </Modal>
   );
 }

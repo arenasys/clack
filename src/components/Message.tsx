@@ -41,13 +41,18 @@ import {
 } from "../util";
 
 import { Autocomplete, AutocompleteRef } from "./Autocomplete";
-import { MarkdownTextbox, MarkdownTextboxRef } from "./Input";
+import {
+  MarkdownTextbox,
+  MarkdownTextboxRef,
+  MarkdownTextInput,
+} from "./Input";
 
 import { FaFile, FaFileUpload, FaTimes } from "react-icons/fa";
 
 import Rand from "rand-seed";
 import { IconButton, TooltipWrapper } from "./Common";
 import { MessageContextMenuState } from "../state/gui";
+import { avatarPreviewURL } from "../state/chat";
 
 export function MessageEntry({ id }: { id: string }) {
   const content = useMemo(() => {
@@ -90,8 +95,8 @@ export function Message({
     return {
       ...m,
       user: a,
-      name: a?.nickname ?? a?.username,
-      color: a?.color,
+      name: a?.displayName,
+      color: a?.roleColor,
       pending: p,
       uploading: u,
       combined: c,
@@ -343,7 +348,7 @@ export function Message({
         <>
           <img
             className="message-avatar clickable-button"
-            src="/avatar.png"
+            src={avatarPreviewURL(message.user)}
             onClick={(e) => {
               if (message.user) {
                 var rect = e.currentTarget.getBoundingClientRect();
@@ -601,8 +606,12 @@ function MessageEditor({
   cancel: () => void;
   save: () => void;
 }) {
+  const ref = useRef<HTMLDivElement>(null);
   const autocompleteRef = useRef<AutocompleteRef>(null);
   const textboxRef = useRef<MarkdownTextboxRef>(null);
+  const setEmojiPickerPopup = getClackState(
+    (state) => state.gui.setEmojiPickerPopup
+  );
 
   useEffect(() => {
     if (textboxRef.current) {
@@ -615,26 +624,33 @@ function MessageEditor({
       <Autocomplete
         ref={autocompleteRef}
         onComplete={(word: string, completion: string) => {
+          console.log("A", word, completion);
           if (textboxRef.current) {
+            console.log("B", word, completion);
             textboxRef.current.complete(word, completion);
           }
         }}
       />
+
       <div
-        className="message-editor-textbox"
+        className="message-editor-container"
         onKeyDown={(e) => {
           autocompleteRef.current?.onKeyDown(e);
         }}
       >
-        <MarkdownTextbox
+        <MarkdownTextInput
           ref={textboxRef}
           value={content}
-          onValue={(text: string, cursor: number) => {
-            autocompleteRef.current?.onValue(text, cursor);
+          onValue={(text: string) => {
+            autocompleteRef.current?.onValue(text, text.length);
             setContent(text);
           }}
+          placeholder="Type your message here..."
+          className="message-editor"
+          innerClassName="message-editor-inner"
         />
       </div>
+
       <div className="message-editor-controls">
         {"escape to "}
         <a
@@ -1131,8 +1147,8 @@ function MessageReference({ id }: { id: string }) {
     return {
       ...m,
       user: a,
-      name: a?.nickname ?? a?.username,
-      color: a?.color,
+      name: a?.displayName,
+      color: a?.roleColor,
     };
   });
 
@@ -1175,7 +1191,10 @@ function MessageReference({ id }: { id: string }) {
                 });
               }}
             >
-              <img className="message-reference-avatar" src="/avatar.png" />
+              <img
+                className="message-reference-avatar"
+                src={avatarPreviewURL(message.user)}
+              />
               {message.name ? (
                 <span
                   className="message-reference-name clickable-text"

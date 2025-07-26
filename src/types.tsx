@@ -23,22 +23,30 @@ export interface Message {
   embeddableURLs?: string[];
 }
 
-export const enum UserStatus {
+export const enum UserPresence {
   Offline = 0,
   Online = 1,
   Away = 2,
+  DontDisturb = 3,
 }
 
+export const DefaultUserColor = 0xff0000;
 export interface User {
   id: Snowflake;
-  username: string;
-  nickname: string;
-  status: UserStatus;
+  userName: string;
+  displayName: string;
+
+  statusMessage: string;
+  profileMessage: string;
+  profileColor: number;
+  avatarModified: number;
+
+  presence: UserPresence;
   roles: Snowflake[];
 
   // Client
   avatarURL?: string;
-  color?: number;
+  roleColor?: number;
 }
 
 export interface Role {
@@ -205,12 +213,12 @@ export const enum Permissions {
   EmbedLinks = 1 << 7,
   AttachFiles = 1 << 8,
   MentionEveryone = 1 << 9,
-  ChangeNickname = 1 << 10,
+  ChangeProfile = 1 << 10,
 
   ViewChannel = 1 << 11,
   ReadMessageHistory = 1 << 12,
 
-  ManageNicknames = 1 << 13,
+  ManageProfiles = 1 << 13,
   ManageMessages = 1 << 14,
   ManageChannels = 1 << 15,
   ManageRoles = 1 << 16,
@@ -270,6 +278,8 @@ export const enum EventType {
   TokenResponse,
   LogoutRequest,
   RegisterRequest,
+
+  UploadSlot,
 }
 
 export const EventTypeDescriptions: { [key: number]: string } = {
@@ -442,6 +452,35 @@ export interface ReactionUsersResponse {
   message: Snowflake;
   emoji: Snowflake;
   users: Snowflake[];
+}
+
+export interface UserUpdateRequest {
+  user: Snowflake;
+  displayName?: string;
+  statusMessage?: string;
+  profileMessage?: string;
+  profileColor?: number;
+  avatarModified?: number;
+
+  setName: boolean;
+  setProfile: boolean;
+  setAvatar: boolean;
+}
+
+export interface UserAddEvent {
+  user: User;
+}
+
+export interface UserDeleteEvent {
+  user: Snowflake;
+}
+
+export interface UserUpdateEvent {
+  user: User;
+}
+
+export interface UploadSlotResponse {
+  slot: Snowflake;
 }
 
 export interface LoginRequest {
