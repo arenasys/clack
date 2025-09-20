@@ -56,11 +56,10 @@ export interface AttachmentModalState {
   file: ChatPendingAttachment;
 }
 
-export interface MessageContextMenuState {
-  message: Snowflake;
-  position: { x: number; y: number };
-  offset: { x: number; y: number };
-  static: boolean;
+export interface ContextMenuState {
+  type: string;
+  id: string;
+  content: JSX.Element;
 }
 
 export interface MessageDeleteModalState {
@@ -118,6 +117,13 @@ export enum SettingsTab {
   Notifications = "notifications",
 }
 
+export enum DashboardTab {
+  Overview = "overview",
+  Members = "members",
+  Roles = "roles",
+  Channels = "channels",
+}
+
 export class GUIState {
   // UI State
   public tooltipPopup?: TooltipPopupState;
@@ -126,7 +132,7 @@ export class GUIState {
 
   public userPopup?: UserPopupState;
   public emojiPickerPopup?: EmojiPickerPopupState;
-  public contextMenuPopup?: MessageContextMenuState;
+  public contextMenuPopup?: ContextMenuState;
   public reactionTooltipPopup?: ReactionTooltipPopupState;
   public youPopup?: YouPopupState;
   public colorPickerPopup?: ColorPickerPopup;
@@ -139,6 +145,7 @@ export class GUIState {
   public avatarModal?: AvatarModalState;
   public showingUserList = true;
   public settingsTab?: SettingsTab;
+  public dashboardTab?: DashboardTab;
 
   // --- Popup & Modal Controls ---
   public setTooltipPopup = (popup?: TooltipPopupState): number => {
@@ -201,13 +208,12 @@ export class GUIState {
     updateClackState(ClackEvents.userPopup);
   };
 
-  public setContextMenuPopup = (popup?: MessageContextMenuState) => {
-    console.log("Setting context menu popup", popup);
-    var oldPopupMessage = this.contextMenuPopup?.message;
+  public setContextMenuPopup = (popup?: ContextMenuState) => {
+    var old = this.contextMenuPopup?.id;
     this.contextMenuPopup = popup;
     updateClackState(ClackEvents.contextMenuPopup);
-    updateClackState(ClackEvents.contextMenu(oldPopupMessage ?? ""));
-    updateClackState(ClackEvents.contextMenu(popup?.message ?? ""));
+    updateClackState(ClackEvents.contextMenu(old ?? ""));
+    updateClackState(ClackEvents.contextMenu(popup?.id ?? ""));
   };
 
   public setEmojiPickerPopup = (popup?: EmojiPickerPopupState) => {
@@ -272,6 +278,11 @@ export class GUIState {
   public setSettingsTab = (tab?: SettingsTab) => {
     this.settingsTab = tab;
     updateClackState(ClackEvents.settingsTab);
+  };
+
+  public setDashboardTab = (tab?: DashboardTab) => {
+    this.dashboardTab = tab;
+    updateClackState(ClackEvents.dashboardTab);
   };
 
   public hasModal = () => {

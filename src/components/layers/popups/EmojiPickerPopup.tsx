@@ -174,6 +174,7 @@ class EmojiPickerState {
       this.bus.emit(this.emojiEvent(oldSelectedEmoji.symbol));
     }
     if (emoji !== undefined) {
+      console.log("SELECT", emoji.symbol);
       this.bus.emit(this.emojiEvent(emoji.symbol));
     }
 
@@ -221,6 +222,7 @@ class EmojiPickerState {
   }
 
   clear() {
+    console.log("CLEAR");
     pickerState.bus.clear();
     if (this.search === undefined) {
       this.setSearch("");
@@ -438,9 +440,19 @@ function EmojiPickerMultitoneList({
     return <></>;
   }
 
-  const multiToneRect = document
+  const multiToneRectViewport = document
     .getElementById(`emoji-picker-entry-${pickerState.multiToneTarget.symbol}`)
     ?.getBoundingClientRect();
+  const pickerRectViewport = document
+    .getElementsByClassName("emoji-picker-popup")[0]
+    ?.getBoundingClientRect();
+
+  const multiToneRect = {
+    top: multiToneRectViewport.top - pickerRectViewport.top,
+    left: multiToneRectViewport.left - pickerRectViewport.left,
+    width: multiToneRectViewport.width,
+    height: multiToneRectViewport.height,
+  };
 
   if (multiToneRect === undefined) {
     return <></>;
@@ -452,7 +464,7 @@ function EmojiPickerMultitoneList({
       className="emoji-picker-multi-tone-list"
       style={{
         top: multiToneRect.top || 0,
-        left: (multiToneRect.left + multiToneRect.right) / 2 || 0,
+        left: multiToneRect.left + multiToneRect.width / 2 || 0,
       }}
     >
       {pickerState.multiToneTarget.diversityChildren
@@ -624,6 +636,8 @@ export default function EmojiPickerPopup() {
     ClackEvents.emojiPickerPopup,
     (state) => state.gui.emojiPickerPopup
   );
+  console.log("PICKER", emojiPickerPopup);
+
   const setEmojiPickerPopup = getClackState(
     (state) => state.gui.setEmojiPickerPopup
   );
@@ -821,9 +835,9 @@ export default function EmojiPickerPopup() {
   }, [toneListRef, multiToneListRef]);
 
   if (emojiPickerPopup === undefined) {
+    pickerState.clear();
     return <></>;
   } else {
-    pickerState.clear();
     var flip = false;
     if (
       emojiPickerPopup.direction == "bottom" &&

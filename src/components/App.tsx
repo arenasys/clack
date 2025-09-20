@@ -26,17 +26,69 @@ import LoadingScreen from "./layers/LoadingScreen";
 import LoginScreen from "./layers/LoginScreen";
 import CaptchaScreen from "./layers/CaptchaScreen";
 import SettingsScreen from "./layers/SettingsScreen";
+import DashboardScreen from "./layers/DashboardScreen";
 
 import { RiArrowDownSLine } from "react-icons/ri";
+import { MdSpaceDashboard } from "react-icons/md";
 import { ErrorBoundary } from "react-error-boundary";
 import { Fallback, FallbackLayer } from "./Error";
-import { ClackEvents, useClackState } from "../state";
+import { ClackEvents, useClackState, getClackState } from "../state";
 import AvatarModal from "./layers/modals/AvatarModal";
+import { DashboardTab } from "../state/gui";
+
+function ServerContextMenu() {
+  const setContextMenu = getClackState(
+    (state) => state.gui.setContextMenuPopup
+  );
+  const setDashboardTab = getClackState((state) => state.gui.setDashboardTab);
+
+  return (
+    <div className={"context-menu server-context-menu static"}>
+      <div
+        className="context-menu-entry"
+        onClick={() => {
+          setDashboardTab(DashboardTab.Overview);
+          setContextMenu(undefined);
+        }}
+      >
+        <div className="context-menu-icon">
+          <MdSpaceDashboard />
+        </div>
+        <div className="context-menu-label">Dashboard</div>
+      </div>
+      <div className="context-menu-divider" />
+      <div
+        className="context-menu-entry"
+        onClick={() => setContextMenu(undefined)}
+      >
+        <div className="context-menu-label">Create Channel</div>
+      </div>
+      <div
+        className="context-menu-entry"
+        onClick={() => setContextMenu(undefined)}
+      >
+        <div className="context-menu-label">Create Category</div>
+      </div>
+    </div>
+  );
+}
 
 function App() {
   const key = useClackState(ClackEvents.reset, (state) => {
     return state.key;
   });
+
+  const setContextMenu = getClackState(
+    (state) => state.gui.setContextMenuPopup
+  );
+  const contextMenu = useClackState(
+    ClackEvents.contextMenuPopup,
+    (state) => state.gui.contextMenuPopup
+  );
+  const serverContextMenu = "server-context-menu";
+  const isServerContextMenu = contextMenu?.id == serverContextMenu;
+
+  const setTooltipPopup = getClackState((state) => state.gui.setTooltipPopup);
 
   return (
     <div id="root" key={key}>
@@ -47,7 +99,21 @@ function App() {
         <div id="header-container">
           <div id="left-header-container">
             <h2 className="server-name">Clack</h2>
-            <IconButton className="server-dropdown-button foreground">
+            <IconButton
+              className={`server-dropdown-button  ${
+                isServerContextMenu ? "hover" : "foreground"
+              }`}
+              tooltip="Server options"
+              tooltipDirection="bottom"
+              onClick={() => {
+                setTooltipPopup(null);
+                setContextMenu({
+                  type: serverContextMenu,
+                  id: serverContextMenu,
+                  content: <ServerContextMenu />,
+                });
+              }}
+            >
               <RiArrowDownSLine className="icon" />
             </IconButton>
           </div>
@@ -122,6 +188,10 @@ function App() {
 
       <ErrorBoundary FallbackComponent={FallbackLayer}>
         <UserPopup />
+      </ErrorBoundary>
+
+      <ErrorBoundary FallbackComponent={FallbackLayer}>
+        <DashboardScreen />
       </ErrorBoundary>
 
       <ErrorBoundary FallbackComponent={FallbackLayer}>

@@ -45,7 +45,7 @@ export default function SettingsScreen() {
   const reset = getClackState((state) => state.reset);
   const logout = getClackState((state) => state.chat.logout);
 
-  function DisplayIsEditing() {
+  function displayIsEditing() {
     const el = document.getElementById("settings-save-popup");
     el.classList.add("shake");
     setTimeout(() => {
@@ -54,9 +54,9 @@ export default function SettingsScreen() {
     return;
   }
 
-  function TrySetSettingsTab(tab: SettingsTab) {
+  function trySetSettingsTab(tab: SettingsTab) {
     if (isEditing) {
-      DisplayIsEditing();
+      displayIsEditing();
       return;
     }
     if (settingsTab !== tab) {
@@ -64,9 +64,9 @@ export default function SettingsScreen() {
     }
   }
 
-  function TryClose() {
+  function tryClose() {
     if (isEditing) {
-      DisplayIsEditing();
+      displayIsEditing();
       return;
     }
     if (modalRef.current) {
@@ -74,9 +74,9 @@ export default function SettingsScreen() {
     }
   }
 
-  function TryLogout() {
+  function tryLogout() {
     if (isEditing) {
-      DisplayIsEditing();
+      displayIsEditing();
       return;
     }
     logout();
@@ -109,7 +109,7 @@ export default function SettingsScreen() {
                   SettingsTab.MyAccount === settingsTab ? "current" : ""
                 }`}
                 onClick={() => {
-                  TrySetSettingsTab(SettingsTab.MyAccount);
+                  trySetSettingsTab(SettingsTab.MyAccount);
                 }}
               >
                 My Account
@@ -119,7 +119,7 @@ export default function SettingsScreen() {
                   SettingsTab.Profile === settingsTab ? "current" : ""
                 }`}
                 onClick={() => {
-                  TrySetSettingsTab(SettingsTab.Profile);
+                  trySetSettingsTab(SettingsTab.Profile);
                 }}
               >
                 Profile
@@ -134,7 +134,7 @@ export default function SettingsScreen() {
                   SettingsTab.Appearance === settingsTab ? "current" : ""
                 }`}
                 onClick={() => {
-                  TrySetSettingsTab(SettingsTab.Appearance);
+                  trySetSettingsTab(SettingsTab.Appearance);
                 }}
               >
                 Appearance
@@ -144,7 +144,7 @@ export default function SettingsScreen() {
                   SettingsTab.VoiceAndVideo === settingsTab ? "current" : ""
                 }`}
                 onClick={() => {
-                  TrySetSettingsTab(SettingsTab.VoiceAndVideo);
+                  trySetSettingsTab(SettingsTab.VoiceAndVideo);
                 }}
               >
                 Voice & Video
@@ -154,7 +154,7 @@ export default function SettingsScreen() {
                   SettingsTab.Notifications === settingsTab ? "current" : ""
                 }`}
                 onClick={() => {
-                  TrySetSettingsTab(SettingsTab.Notifications);
+                  trySetSettingsTab(SettingsTab.Notifications);
                 }}
               >
                 Notifications
@@ -170,7 +170,7 @@ export default function SettingsScreen() {
                     acceptLabel: "Log Out",
                     closeLabel: "Cancel",
                     onAccept: () => {
-                      TryLogout();
+                      tryLogout();
                     },
                     onClose: () => {
                       modalRef.current?.focus();
@@ -194,7 +194,7 @@ export default function SettingsScreen() {
               <div
                 className="settings-close"
                 onClick={() => {
-                  TryClose();
+                  tryClose();
                 }}
               >
                 <div className="settings-close-button">

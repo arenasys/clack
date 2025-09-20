@@ -52,6 +52,7 @@ export class ClackEventsClass {
   public userPopup = `userPopup` as const;
   public editorFocus = `editorFocus` as const;
   public settingsTab = `settingsTab` as const;
+  public dashboardTab = `dashboardTab` as const;
   public reset = `reset` as const;
 }
 

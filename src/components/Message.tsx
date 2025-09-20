@@ -19,7 +19,7 @@ import {
   Permissions,
 } from "../types";
 
-import { Emoji } from "../emoji";
+import { Emoji, EmojiLookupName } from "../emoji";
 
 import { VideoDisplay, ImageDisplay, AnimatedImageDisplay } from "./Media";
 
@@ -28,6 +28,7 @@ import { IoClose } from "react-icons/io5";
 import { IoMdCreate, IoMdDownload } from "react-icons/io";
 import { MdPhoto } from "react-icons/md";
 import { FaImage } from "react-icons/fa6";
+import { IoIosArrowForward } from "react-icons/io";
 
 import {
   FormatDateTime,
@@ -51,7 +52,7 @@ import { FaFile, FaFileUpload, FaTimes } from "react-icons/fa";
 
 import Rand from "rand-seed";
 import { IconButton, TooltipWrapper } from "./Common";
-import { MessageContextMenuState } from "../state/gui";
+import { ContextMenuState } from "../state/gui";
 import { avatarPreviewURL } from "../state/chat";
 
 export function MessageEntry({ id }: { id: string }) {
@@ -140,11 +141,11 @@ export function Message({
   const jumpToMessage = getClackState((state) => state.chat.jumpToMessage);
 
   const [actionBarContextMenu, setActionBarContextMenu] = useState<
-    MessageContextMenuState | undefined
+    string | undefined
   >(undefined);
-  const [mouseContextMenu, setMouseContextMenu] = useState<
-    MessageContextMenuState | undefined
-  >(undefined);
+  const [mouseContextMenu, setMouseContextMenu] = useState<string | undefined>(
+    undefined
+  );
 
   const ownsContextMenu = actionBarContextMenu || mouseContextMenu;
 
@@ -160,7 +161,7 @@ export function Message({
 
   useClackState(ClackEvents.contextMenu(id), (state) => {
     const current = state.gui.contextMenuPopup;
-    if (!current || current.message != id) {
+    if (!current || current.id != id) {
       if (actionBarContextMenu) {
         setActionBarContextMenu(undefined);
       }
@@ -316,15 +317,20 @@ export function Message({
                 clearContextMenu();
               } else {
                 const contextMenu = {
-                  message: id,
-                  position: {
-                    x: (rect.left + rect.right) / 2,
-                    y: (rect.top + rect.bottom) / 2,
-                  },
-                  offset: { x: 16 + 8, y: -16 },
-                  static: true,
+                  type: "message",
+                  id: id,
+                  content: (
+                    <MessageContextMenu
+                      id={id}
+                      position={{
+                        x: (rect.left + rect.right) / 2,
+                        y: (rect.top + rect.bottom) / 2,
+                      }}
+                      offset={{ x: 16 + 8, y: -16 }}
+                    />
+                  ),
                 };
-                setActionBarContextMenu(contextMenu);
+                setActionBarContextMenu(id);
                 setContextMenuPopup(contextMenu);
               }
             }}
@@ -517,12 +523,17 @@ export function Message({
           clearContextMenu();
         } else {
           const contextMenu = {
-            message: id,
-            position: { x: e.clientX, y: e.clientY },
-            offset: { x: 0, y: 0 },
-            static: false,
+            type: "message",
+            id: id,
+            content: (
+              <MessageContextMenu
+                id={id}
+                position={{ x: e.clientX, y: e.clientY }}
+                offset={{ x: 0, y: 0 }}
+              />
+            ),
           };
-          setMouseContextMenu(contextMenu);
+          setMouseContextMenu(id);
           setContextMenuPopup(contextMenu);
         }
       }}
@@ -1327,6 +1338,253 @@ function MessageReactions({ id }: { id: string }) {
   );
 }
 
+function MessageContextMenu({
+  id,
+  position,
+  offset,
+}: {
+  id: string;
+  position: { x: number; y: number };
+  offset: { x: number; y: number };
+}) {
+  const contextMenuPopup = useClackState(
+    ClackEvents.contextMenuPopup,
+    (state) => state.gui.contextMenuPopup
+  );
+  const setContextMenuPopup = getClackState(
+    (state) => state.gui.setContextMenuPopup
+  );
+
+  const [yourMessage, permissions, hasReactions] = useClackStateDynamic(
+    (state, events) => {
+      if (!contextMenuPopup) {
+        return [false, 0, false];
+      }
+
+      events.push(ClackEvents.current);
+      if (!state.chat.currentUser) {
+        return [false, 0, false];
+      }
+
+      events.push(ClackEvents.message(id));
+      const message = state.chat.messages.get(id);
+      if (!message) {
+        return [false, 0, false];
+      }
+
+      events.push(ClackEvents.channel(message.channel));
+      events.push(ClackEvents.user(message.author));
+
+      return [
+        state.chat.currentUser === message.author,
+        state.chat.getPermissions(state.chat.currentUser, message.channel),
+        message.reactions && message.reactions.length > 0,
+      ];
+    },
+    [contextMenuPopup]
+  );
+
+  const canEditMessage = yourMessage;
+  const canManageMessage = (permissions & Permissions.ManageMessages) != 0;
+  const canReplyMessage = (permissions & Permissions.SendMessages) != 0;
+  const canReactMessage = (permissions & Permissions.AddReactions) != 0;
+  const canDeleteMessage = yourMessage || canManageMessage;
+  const canPinMessage = canManageMessage;
+
+  const deleteMessage = getClackState((state) => state.chat.deleteMessage);
+  const setMessageDeleteModal = getClackState(
+    (state) => state.gui.setMessageDeleteModal
+  );
+  const setReplyingTo = getClackState((state) => state.chat.setReplyingTo);
+  const setMessageReactionsModal = getClackState(
+    (state) => state.gui.setMessageReactionsModal
+  );
+  const toggleReaction = getClackState((state) => state.chat.toggleReaction);
+  const setEmojiPickerPopup = getClackState(
+    (state) => state.gui.setEmojiPickerPopup
+  );
+
+  const [showReactionMenu, setShowReactionMenu] = useState(false);
+
+  var flipX = false;
+  var flipY = false;
+
+  if (position.x > window.innerWidth - 200) {
+    flipX = true;
+  }
+
+  if (position.y > window.innerHeight - 350) {
+    flipY = true;
+  }
+
+  var style = {
+    top: undefined,
+    left: undefined,
+    bottom: undefined,
+    right: undefined,
+  };
+  const x = position.x;
+  const y = position.y;
+  const ox = offset.x;
+  const oy = offset.y;
+
+  if (flipX) {
+    style.right = window.innerWidth - x + ox;
+  } else {
+    style.left = x + ox;
+  }
+
+  if (flipY) {
+    style.bottom = window.innerHeight - y + oy;
+  } else {
+    style.top = y + oy;
+  }
+
+  function openEmojiPicker() {
+    const pickerX = flipX ? x - 16 : x + 16;
+    const pickerY = flipY ? y - 16 : y + 16;
+
+    setEmojiPickerPopup({
+      position: {
+        x: pickerX,
+        y: pickerY,
+      },
+      direction: flipY ? "top" : "bottom",
+      onPick: (emojiID: Snowflake) => {
+        toggleReaction(id, emojiID);
+      },
+      onClose: () => {},
+    });
+    setContextMenuPopup(undefined);
+  }
+
+  const default_emojis: string[] = ["thumbsup", "heart", "clap", "fire"];
+
+  return (
+    <div
+      className={
+        "context-menu context-menu" +
+        (flipX ? " flip-x" : "") +
+        (flipY ? " flip-y" : "")
+      }
+      style={style}
+    >
+      {canReactMessage && (
+        <div className="context-menu-entry">
+          <div
+            className="context-menu-entry-wrapper"
+            onClick={() => {
+              openEmojiPicker();
+            }}
+          >
+            <div className="context-menu-label">Add Reaction</div>
+            <div className="context-menu-arrow">
+              <IoIosArrowForward />
+            </div>
+          </div>
+
+          <div className={`context-menu-submenu-joiner`} />
+
+          <div className={`context-menu context-menu-submenu`}>
+            {default_emojis.map((name) => {
+              const emoji = EmojiLookupName(name);
+
+              return (
+                <div
+                  key={emoji.id}
+                  className="context-menu-entry"
+                  onClick={() => {
+                    toggleReaction(id, emoji.id);
+                    setContextMenuPopup(undefined);
+                  }}
+                >
+                  <div className="context-menu-emoji">
+                    <Emoji symbol={emoji.symbol} size={22} />
+                  </div>
+                  <div className="context-menu-label">
+                    {`:${emoji.names[0]}:`}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {hasReactions && (
+        <div
+          className="context-menu-entry"
+          onClick={() => {
+            setMessageReactionsModal({
+              message: id,
+            });
+            setContextMenuPopup(undefined);
+          }}
+        >
+          <div className="context-menu-label">View Reactions</div>
+        </div>
+      )}
+      <div className="context-menu-divider" />
+      {canReplyMessage && (
+        <div
+          className="context-menu-entry"
+          onClick={() => {
+            setReplyingTo(id);
+            setContextMenuPopup(undefined);
+          }}
+        >
+          <div className="context-menu-label">Reply</div>
+        </div>
+      )}
+      {canEditMessage && (
+        <div className="context-menu-entry">
+          <div className="context-menu-label">Edit Message</div>
+        </div>
+      )}
+      {canPinMessage && (
+        <div className="context-menu-entry">
+          <div className="context-menu-label">Pin Message</div>
+        </div>
+      )}
+      <div
+        className="context-menu-entry"
+        onClick={() => {
+          const message = getClackState((state) => state.chat.messages.get(id));
+          if (message) {
+            navigator.clipboard.writeText(message.content);
+          }
+          setContextMenuPopup(undefined);
+        }}
+      >
+        <div className="context-menu-label">Copy Text</div>
+      </div>
+      {canDeleteMessage && (
+        <div
+          className="context-menu-entry"
+          onClick={(e) => {
+            if (e.shiftKey) {
+              deleteMessage(id);
+            } else {
+              setMessageDeleteModal({ message: id });
+            }
+            setContextMenuPopup(undefined);
+          }}
+        >
+          <div className="context-menu-label red">Delete Message</div>
+        </div>
+      )}
+      <div className="context-menu-divider" />
+      <div
+        className="context-menu-entry"
+        onClick={() => {
+          navigator.clipboard.writeText(id);
+          setContextMenuPopup(undefined);
+        }}
+      >
+        <div className="context-menu-label">Copy ID</div>
+      </div>
+    </div>
+  );
+}
 function Skeleton({ id }: { id: string }) {
   const rng = new Rand(id.split("-")[1]);
   const row = () => {

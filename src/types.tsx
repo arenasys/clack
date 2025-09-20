@@ -502,3 +502,32 @@ export interface TokenResponse {
 }
 
 export interface LogoutRequest {}
+
+export interface RoleAddRequest {
+  name: string;
+  color: number;
+  position: number;
+  permissions: number;
+  hoisted: boolean;
+  mentionable: boolean;
+}
+
+export interface RoleUpdateRequest {
+  role: Role;
+}
+
+export interface RoleDeleteRequest {
+  role: Snowflake;
+}
+
+export interface RoleAddEvent {
+  role: Role;
+}
+
+export interface RoleUpdateEvent {
+  role: Role;
+}
+
+export interface RoleDeleteEvent {
+  role: Snowflake;
+}

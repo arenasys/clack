@@ -38,6 +38,12 @@ import {
   UserAddEvent,
   UserDeleteEvent,
   UserUpdateEvent,
+  RoleAddRequest,
+  RoleUpdateRequest,
+  RoleDeleteRequest,
+  RoleAddEvent,
+  RoleUpdateEvent,
+  RoleDeleteEvent,
 } from "../types";
 
 import { dequal } from "dequal";
@@ -389,13 +395,29 @@ export class ChatRoleStore {
   setRoles(roles: Role[]) {
     roles = roles.sort((a, b) => a.position - b.position);
 
-    this.order = [];
     this.store = new Map();
-
     for (let role of roles) {
       this.store.set(role.id, role);
     }
-    this.order = roles.map((role) => role.id);
+
+    this.updateOrder();
+  }
+
+  insertRole(role: Role) {
+    this.store.set(role.id, role);
+    this.updateOrder();
+  }
+
+  updateOrder() {
+    const roles = Array.from(this.store.values()).sort(
+      (a, b) => a.position - b.position
+    );
+    this.order = roles.map((r) => r.id);
+  }
+
+  deleteRole(id: Snowflake) {
+    this.store.delete(id);
+    this.order = this.order.filter((rid) => rid !== id);
   }
 
   orderRoles(roles: Role[]) {
@@ -645,6 +667,19 @@ export class ChatState {
   processRoles = (roles: Role[]) => {
     this.roles.setRoles(roles);
     updateClackState(ClackEvents.roleList);
+  };
+
+  addRole = (req: RoleAddRequest) => {
+    this.pushRequest({ type: EventType.RoleAdd, data: req });
+  };
+
+  updateRole = (req: RoleUpdateRequest) => {
+    this.pushRequest({ type: EventType.RoleUpdate, data: req });
+  };
+
+  deleteRole = (role: Snowflake) => {
+    const req: RoleDeleteRequest = { role };
+    this.pushRequest({ type: EventType.RoleDelete, data: req });
   };
 
   processChannels = (channels: Channel[]) => {
@@ -1548,8 +1583,44 @@ export class ChatState {
     else if (msg.type === EventType.UserAdd) this.onUserAdd(msg.data);
     else if (msg.type === EventType.UserDelete) this.onUserDelete(msg.data);
     else if (msg.type === EventType.UserUpdate) this.onUserUpdate(msg.data);
+    else if (msg.type === EventType.RoleAdd) this.onRoleAdd(msg.data);
+    else if (msg.type === EventType.RoleUpdate) this.onRoleUpdate(msg.data);
+    else if (msg.type === EventType.RoleDelete) this.onRoleDelete(msg.data);
     else if (msg.type === EventType.UploadSlot)
       this.onUploadSlot(msg.data, msg.seq);
     else if (msg.type === EventType.ErrorResponse) this.onError(msg.data);
+  };
+
+  onRoleAdd = (msg: RoleAddEvent) => {
+    this.roles.insertRole(msg.role);
+    updateClackState(ClackEvents.role(msg.role.id));
+    updateClackState(ClackEvents.roleList);
+  };
+
+  onRoleUpdate = (msg: RoleUpdateEvent) => {
+    this.roles.insertRole(msg.role);
+
+    updateClackState(ClackEvents.role(msg.role.id));
+    updateClackState(ClackEvents.roleList);
+
+    const affected = [...this.users.values()].filter((u) =>
+      u.roles.includes(msg.role.id)
+    );
+
+    this.processUsers(affected.map((u) => ({ ...u })));
+  };
+
+  onRoleDelete = (msg: RoleDeleteEvent) => {
+    const id = msg.role;
+    this.roles.deleteRole(id);
+
+    updateClackState(ClackEvents.role(id));
+    updateClackState(ClackEvents.roleList);
+
+    const affected = [...this.users.values()].filter((u) =>
+      u.roles.includes(id)
+    );
+
+    this.processUsers(affected.map((u) => ({ ...u })));
   };
 }

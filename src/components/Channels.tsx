@@ -68,8 +68,7 @@ function Channels() {
 
   return (
     <div
-      id="channel-list"
-      className={"thin-scrollbar" + (noGroup ? " no-group" : "")}
+      className={"channel-view thin-scrollbar" + (noGroup ? " no-group" : "")}
     >
       {channelGroups.map((group) => {
         var channels = group.channels.map((id) => (
