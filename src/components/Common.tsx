@@ -195,15 +195,24 @@ export function ClickWrapper({
   const wrapperRef = useRef<HTMLDivElement>(null);
   const pointerDowned = useRef(false);
 
+  const WHITELIST_SELECTORS = "[data-allow-click]";
+
   useEffect(() => {
     const el = wrapperRef.current;
     if (!el) return;
+
+    function isWhitelisted(target: Element | null) {
+      if (!target) return false;
+      console.log(target, target.closest(WHITELIST_SELECTORS));
+      return Boolean(target.closest(WHITELIST_SELECTORS));
+    }
 
     function isClickOnWrapper(x: number, y: number) {
       if (wrapperRef.current == null) return false;
       const wrapper = wrapperRef.current;
       const el = document.elementFromPoint(x, y);
       if (el == null) return false;
+      if (isWhitelisted(el)) return false;
       if (passthrough && !wrapperRef.current.contains(el)) return true;
       if (!passthrough && el === wrapper) return true;
       return false;

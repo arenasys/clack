@@ -3,6 +3,7 @@ import { Range, Point, Path, Descendant, last } from "slate";
 
 import { FindEmojis, EmojiInline, EmojiInlineExternal } from "./emoji";
 import { useClackState, getClackState, ClackEvents } from "./state";
+import { UserContextMenu } from "./components/Users";
 import { FormatColor } from "./util";
 
 import hljs from "highlight.js";
@@ -391,6 +392,9 @@ export const userMentionRule: SyntaxRule = {
       state.chat.users.get(id)
     );
     const setUserPopup = getClackState((state) => state.gui.setUserPopup);
+    const setContextMenuPopup = getClackState(
+      (state) => state.gui.setContextMenuPopup
+    );
 
     if (user !== undefined) {
       return (
@@ -400,12 +404,26 @@ export const userMentionRule: SyntaxRule = {
             const rect = e.currentTarget.getBoundingClientRect();
             setUserPopup({
               id: user.id,
-              user: user,
               position: {
                 x: rect.right + 8,
                 y: rect.top,
               },
               direction: "right",
+            });
+          }}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setContextMenuPopup({
+              type: "user",
+              id: user.id,
+              content: (
+                <UserContextMenu
+                  id={user.id}
+                  position={{ x: e.clientX, y: e.clientY }}
+                  offset={{ x: 0, y: 0 }}
+                />
+              ),
             });
           }}
         >{`@${user.displayName}`}</span>

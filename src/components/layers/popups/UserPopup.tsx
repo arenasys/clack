@@ -5,12 +5,21 @@ import {
   ClackEvents,
   useClackStateDynamic,
 } from "../../../state";
-import { UserAvatarBigSVG } from "../../Users";
-import { DefaultUserColor, User } from "../../../types";
+import { UserAvatarBigSVG, UserContextMenuRoles } from "../../Users";
+import {
+  DefaultUserColor,
+  User,
+  Permissions,
+  HasPermission,
+} from "../../../types";
 import { EmojiContent, SyntaxContent } from "../../../syntax";
 
-import { FormatColor } from "../../../util";
-import { ClickWrapper } from "../../Common";
+import { FormatColor, NeedsDarkForeground } from "../../../util";
+import { ClickWrapper, IconButton, TooltipWrapper } from "../../Common";
+
+import { IoClose } from "react-icons/io5";
+import { IoMdAdd, IoMdClose } from "react-icons/io";
+import { ImCross } from "react-icons/im";
 
 const MAX_CARD_HEIGHT = 500;
 
@@ -20,12 +29,42 @@ export default function UserPopup() {
     (state) => state.gui.userPopup
   );
   const setUserPopup = getClackState((state) => state.gui.setUserPopup);
+  const deleteUserRole = getClackState((state) => state.chat.deleteUserRole);
+  const setContextMenuPopup = getClackState(
+    (state) => state.gui.setContextMenuPopup
+  );
 
-  const userRoleIDs = userPopup?.user.roles ?? [];
-  const userRoles = useClackStateDynamic(
+  const userID = userPopup?.id || "";
+
+  const [user, userRoles] = useClackStateDynamic(
     (state, events) => {
-      events.push(...userRoleIDs.map((id) => ClackEvents.role(id)));
-      return state.chat.roles.getRoles(userRoleIDs);
+      if (userPopup == undefined) {
+        return [undefined, []];
+      }
+      events.push(ClackEvents.user(userPopup.id));
+      events.push(ClackEvents.roleList);
+
+      var user = state.chat.users.get(userPopup.id);
+      var roles = state.chat.roles.getAll();
+      var userRoles = roles.filter((role) => user?.roles.includes(role.id));
+      return [user, userRoles];
+    },
+    [userID]
+  );
+
+  const [you, youPermissions] = useClackStateDynamic(
+    (state, events) => {
+      if (userPopup == undefined) {
+        return [undefined, 0];
+      }
+      events.push(ClackEvents.user(state.chat.currentUser));
+
+      var user = state.chat.users.get(state.chat.currentUser);
+      var permissions = state.chat.getPermissions(
+        state.chat.currentUser,
+        undefined
+      );
+      return [user, permissions];
     },
     [userPopup]
   );
@@ -45,6 +84,9 @@ export default function UserPopup() {
     flip = true;
   }
 
+  var hasManageRoles = HasPermission(youPermissions, Permissions.ManageRoles);
+  var canManageRoles = hasManageRoles && user.rank > you.rank;
+
   return (
     <ClickWrapper
       passthrough={true}
@@ -53,6 +95,7 @@ export default function UserPopup() {
           return;
         }
         if (getClackState((state) => state.gui.userPopup)?.id == userPopup.id) {
+          console.log("Close user popup");
           setUserPopup(undefined);
         }
       }}
@@ -80,19 +123,82 @@ export default function UserPopup() {
               (flip ? " flip" : "")
             }
           >
-            <UserPopupContainer user={userPopup.user}>
+            <UserPopupContainer user={user}>
               <div className="user-popup-roles">
                 {userRoles.map((role) => {
-                  return (
-                    <div key={role.id} className="user-popup-role">
-                      <span
-                        className="user-popup-role-color"
-                        style={{ backgroundColor: FormatColor(role.color) }}
-                      />
-                      <span className="user-popup-role-name">{role.name}</span>
-                    </div>
-                  );
+                  var canRemove = canManageRoles && role.position > you.rank;
+
+                  if (canRemove) {
+                    return (
+                      <TooltipWrapper
+                        key={role.id}
+                        tooltip="Remove Role"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+
+                          deleteUserRole(user.id, role.id);
+                        }}
+                      >
+                        <div className="user-popup-role removable">
+                          <span
+                            className="user-popup-role-color"
+                            style={{
+                              backgroundColor: FormatColor(role.color),
+                            }}
+                          >
+                            <IoMdClose />
+                          </span>
+                          <span className="user-popup-role-name">
+                            {role.name}
+                          </span>
+                        </div>
+                      </TooltipWrapper>
+                    );
+                  } else {
+                    return (
+                      <div key={role.id} className="user-popup-role">
+                        <span
+                          className="user-popup-role-color"
+                          style={{
+                            backgroundColor: FormatColor(role.color),
+                          }}
+                        />
+                        <span className="user-popup-role-name">
+                          {role.name}
+                        </span>
+                      </div>
+                    );
+                  }
                 })}
+                {canManageRoles && (
+                  <IconButton
+                    className="user-popup-role-add-button"
+                    tooltip="Add Role"
+                    onClick={(rect) => {
+                      var style = {
+                        top: rect.bottom + 2,
+                        left: rect.left,
+                      };
+
+                      setContextMenuPopup({
+                        type: "user-roles",
+                        id: user.id,
+                        content: (
+                          <div
+                            data-allow-click
+                            className="context-menu"
+                            style={style}
+                          >
+                            <UserContextMenuRoles userID={user.id} />
+                          </div>
+                        ),
+                      });
+                    }}
+                  >
+                    <IoMdAdd />
+                  </IconButton>
+                )}
               </div>
             </UserPopupContainer>
           </div>

@@ -23,7 +23,7 @@ export default function ContextMenuPopup() {
 
   return (
     <ClickWrapper
-      passthrough={true}
+      passthrough={false}
       onClick={() => {
         console.log("Closing context menu");
         setContextMenuPopup(undefined);

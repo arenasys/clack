@@ -10,6 +10,7 @@ import {
   AttachmentType,
   MessageType,
   Permissions,
+  HasPermission,
   OverwriteType,
   EventType,
   ErrorCode,
@@ -44,6 +45,8 @@ import {
   RoleAddEvent,
   RoleUpdateEvent,
   RoleDeleteEvent,
+  UserRoleAddRequest,
+  UserRoleDeleteRequest,
 } from "../types";
 
 import { dequal } from "dequal";
@@ -434,6 +437,10 @@ export class ChatRoleStore {
     );
   }
 
+  getAll() {
+    return this.orderRoles(Array.from(this.store.values()));
+  }
+
   get(id: Snowflake) {
     return this.store.get(id);
   }
@@ -641,7 +648,7 @@ export class ChatState {
     permission: Permissions
   ): boolean => {
     const permissions = this.getPermissions(userID, channelID);
-    return (permissions & permission) === permission;
+    return HasPermission(permissions, permission);
   };
 
   finishCaptcha = (captchaResponse: string | undefined) => {
@@ -666,6 +673,7 @@ export class ChatState {
 
   processRoles = (roles: Role[]) => {
     this.roles.setRoles(roles);
+    console.log("ROLES", roles);
     updateClackState(ClackEvents.roleList);
   };
 
@@ -680,6 +688,16 @@ export class ChatState {
   deleteRole = (role: Snowflake) => {
     const req: RoleDeleteRequest = { role };
     this.pushRequest({ type: EventType.RoleDelete, data: req });
+  };
+
+  addUserRole = (user: Snowflake, role: Snowflake) => {
+    const req: UserRoleAddRequest = { user, role };
+    this.pushRequest({ type: EventType.UserRoleAdd, data: req });
+  };
+
+  deleteUserRole = (user: Snowflake, role: Snowflake) => {
+    const req: UserRoleDeleteRequest = { user, role };
+    this.pushRequest({ type: EventType.UserRoleDelete, data: req });
   };
 
   processChannels = (channels: Channel[]) => {
@@ -1266,15 +1284,20 @@ export class ChatState {
     users.forEach((user) => {
       const oldUser = this.users.get(user.id);
       let color: number | undefined;
-      let pos = Number.MAX_VALUE;
+      let color_best = Number.MAX_VALUE;
+      let rank = Number.MAX_VALUE;
       user.roles.forEach((roleId) => {
         const r = this.roles.get(roleId);
-        if (r?.color && r.position < pos) {
+        if (r.position < rank) {
+          rank = r.position;
+        }
+        if (r?.color && r.position < color_best) {
           color = r.color;
-          pos = r.position;
+          color_best = r.position;
         }
       });
       user.roleColor = color;
+      user.rank = rank;
       this.users.set(user.id, user);
       updateClackStateConditional(ClackEvents.user(user.id), oldUser, user);
     });
@@ -1561,6 +1584,8 @@ export class ChatState {
   };
 
   onResponse = (msg: any) => {
+    console.log("RESPONSE", msg.type);
+
     if (msg.type === EventType.SettingsResponse) this.onSettings(msg.data);
     else if (msg.type === EventType.TokenResponse) this.onToken(msg.data);
     else if (msg.type === EventType.OverviewResponse) this.onOverview(msg.data);

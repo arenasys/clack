@@ -47,6 +47,7 @@ export interface User {
   // Client
   avatarURL?: string;
   roleColor?: number;
+  rank: number;
 }
 
 export interface Role {
@@ -227,6 +228,16 @@ export const enum Permissions {
   All = 0x7fffffff,
 }
 
+export function HasPermission(
+  permissions: number,
+  permission: Permissions
+): boolean {
+  return (permissions & Permissions.Administrator) ===
+    Permissions.Administrator || (permissions & permission) === permission
+    ? true
+    : false;
+}
+
 export const enum EventType {
   ErrorResponse,
 
@@ -280,6 +291,8 @@ export const enum EventType {
   RegisterRequest,
 
   UploadSlot,
+  UserRoleAdd,
+  UserRoleDelete,
 }
 
 export const EventTypeDescriptions: { [key: number]: string } = {
@@ -529,5 +542,15 @@ export interface RoleUpdateEvent {
 }
 
 export interface RoleDeleteEvent {
+  role: Snowflake;
+}
+
+export interface UserRoleAddRequest {
+  user: Snowflake;
+  role: Snowflake;
+}
+
+export interface UserRoleDeleteRequest {
+  user: Snowflake;
   role: Snowflake;
 }

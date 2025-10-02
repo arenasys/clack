@@ -135,6 +135,54 @@ a:hover {
   text-decoration: underline;
 }
 
+
+
+.icon-button {
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  color: var(--fg-color-2);
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.icon-button.selected {
+  background-color: var(--bg-color-1);
+}
+
+.icon-button:hover {
+  background-color: var(--user-hightlight);
+}
+
+.icon-button.hover {
+  background-color: var(--user-hightlight);
+}
+
+.icon-button.red {
+  color: var(--button-red);
+}
+
+.icon-button.on {
+  color: var(--fg-color-1);
+}
+
+.icon-button.active {
+  background-color: var(--bg-color-3);
+}
+
+.icon-button.foreground:hover {
+  background-color: unset;
+  color: var(--fg-color-1-0);
+}
+
+.icon-button svg {
+  width: 22px;
+  height: 22px;
+}
+
 /**:focus::after {
   content: "";
   position: absolute;
@@ -3019,6 +3067,8 @@ button {
   height: 24px;
   border-radius: 4px;
   background: var(--bg-color-0);
+  user-select: none;
+  cursor: default;
 }
 
 .user-popup-role-color {
@@ -3030,10 +3080,43 @@ button {
   height: 12px;
   padding: 0;
   margin: 0 4px;
+
+  font-size: 18px;
+
+  color: var(--fg-color-2);
+}
+
+.user-popup-role-color > svg {
+  display: none;
+  width: 18px;
+  height: 18px;
+  position: absolute;
+}
+
+.user-popup-role:hover.removable {
+  cursor: pointer;
+  background: var(--bg-color-1);
+}
+
+.user-popup-role:hover.removable .user-popup-role-color {
+  background-color: unset !important;
+}
+.user-popup-role:hover.removable .user-popup-role-color > svg {
+  display: block;
 }
 
 .user-popup-role-name {
   margin-right: 4px;
+}
+
+.user-popup-role-add-button {
+  height: 24px;
+  width: 24px;
+  background-color: var(--bg-color-0);
+}
+
+.user-popup-role-add-button:hover {
+  background-color: var(--bg-color-1);
 }
 
 .user-popup-seperator {
@@ -3349,52 +3432,6 @@ button {
   white-space: nowrap;
   text-overflow: ellipsis;
   overflow: hidden;
-}
-
-.icon-button {
-  width: 32px;
-  height: 32px;
-  border-radius: 4px;
-  color: var(--fg-color-2);
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-}
-
-.icon-button.selected {
-  background-color: var(--bg-color-1);
-}
-
-.icon-button:hover {
-  background-color: var(--user-hightlight);
-}
-
-.icon-button.hover {
-  background-color: var(--user-hightlight);
-}
-
-.icon-button.red {
-  color: var(--button-red);
-}
-
-.icon-button.on {
-  color: var(--fg-color-1);
-}
-
-.icon-button.active {
-  background-color: var(--bg-color-3);
-}
-
-.icon-button.foreground:hover {
-  background-color: unset;
-  color: var(--fg-color-1-0);
-}
-
-.icon-button svg {
-  width: 22px;
-  height: 22px;
 }
 
 .spoiler-overlay {
@@ -3738,12 +3775,12 @@ button {
   position: relative;
   user-select: none;
   height: 32px;
-  margin: 1px 0px;
-  padding: 0px 0px 0px 8px;
+  padding: 1px 8px 0px 8px;
   display: flex;
   flex-direction: row;
   align-items: center;
   border-radius: 2px;
+  cursor: pointer;
 }
 
 .context-menu-entry:hover {
@@ -3783,12 +3820,13 @@ button {
 
 .context-menu-submenu {
   position: absolute;
-top: -8px;
-    left: calc(100% + 10px);
+  top: -8px;
+  left: calc(100% + 10px);
   display: none;
   padding: 8px;
   width: 140px;
   gap: 0px;
+  cursor: default;
 }
 
 .context-menu-entry:hover > .context-menu-submenu {
@@ -3801,15 +3839,20 @@ top: -8px;
 
 .context-menu-submenu.flip-x {
   left: auto;
-  right: calc(100% - 2px);
+  right: calc(100% + 10px);
 }
 
-.context-menu-submenu-joiner {
-  position:absolute;
+.context-menu-submenu-join-area {
+  position: absolute;
   top: 0px;
-  left: 100%;
-  height: 100%;
-  width: 32px;
+  left: -16px;
+  bottom: 0px;
+  right: 0px;
+}
+
+.context-menu-submenu.flip-x > .context-menu-submenu-join-area {
+  left: 0px;
+  right: -16px;
 }
 
 .context-menu-emoji {
@@ -3824,6 +3867,51 @@ top: -8px;
 .context-menu-emoji .emoji {
   width: 20px;
   height: 20px;
+}
+
+.context-menu-role-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: var(--fg-color-3);
+  flex-shrink: 0;
+  margin-right: 8px;
+}
+.context-menu-checkbox {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1px solid var(--bg-color-4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: transparent;
+  pointer-events: none;
+  transition: background-color 120ms ease, border-color 120ms ease,
+    color 120ms ease, opacity 120ms ease;
+  margin-left: auto;
+}
+
+.context-menu-checkbox svg {
+  width: 14px;
+  height: 14px;
+}
+
+.context-menu-checkbox.checked {
+  background-color: var(--accent-color-0);
+  border-color: var(--accent-color-0);
+  color: var(--fg-color-0);
+}
+
+.context-menu-checkbox.disabled {
+  opacity: 0.7;
+}
+
+.context-menu-checkbox.disabled.checked {
+  background-color: var(--bg-color-3);
+  border-color: var(--bg-color-3);
+  color: var(--fg-color-2);
 }
 
 .monospace-preload {

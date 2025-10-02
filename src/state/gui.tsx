@@ -20,7 +20,6 @@ export interface TooltipPopupState {
 
 export interface UserPopupState {
   id: Snowflake;
-  user: User;
   direction: "left" | "right";
   position: { x: number; y: number };
 }

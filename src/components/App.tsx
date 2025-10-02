@@ -211,10 +211,6 @@ function App() {
       </ErrorBoundary>
 
       <ErrorBoundary FallbackComponent={FallbackLayer}>
-        <ContextMenuPopup />
-      </ErrorBoundary>
-
-      <ErrorBoundary FallbackComponent={FallbackLayer}>
         <GeneralModal />
       </ErrorBoundary>
 
@@ -224,6 +220,10 @@ function App() {
 
       <ErrorBoundary FallbackComponent={FallbackLayer}>
         <CaptchaScreen />
+      </ErrorBoundary>
+
+      <ErrorBoundary FallbackComponent={FallbackLayer}>
+        <ContextMenuPopup />
       </ErrorBoundary>
 
       <ErrorBoundary FallbackComponent={FallbackLayer}>

@@ -1,14 +1,20 @@
-import { useClackState, getClackState, ClackEvents } from "../state";
+import {
+  useClackState,
+  getClackState,
+  ClackEvents,
+  useClackStateDynamic,
+} from "../state";
 import { FormatColor } from "../util";
 
 import { useRef } from "react";
 
-import { User, UserPresence } from "../types";
+import { User, UserPresence, Role, Permissions, HasPermission } from "../types";
 import { EmojiContent, SyntaxContent } from "../syntax";
 import Rand from "rand-seed";
 
 import List from "./List";
 import { avatarDisplayURL, avatarPreviewURL } from "../state/chat";
+import { IoMdPricetag, IoMdCheckmark, IoIosArrowForward } from "react-icons/io";
 
 const userEntryHeight = 45;
 const userGroupHeight = 41;
@@ -245,6 +251,9 @@ export function UserEntry({ id, idx }: { id: string; idx: number }) {
     state.chat.users.get(id)
   );
   const setUserPopup = getClackState((state) => state.gui.setUserPopup);
+  const setContextMenuPopup = getClackState(
+    (state) => state.gui.setContextMenuPopup
+  );
 
   if (!user) {
     const gen = new Rand(String(idx));
@@ -276,12 +285,26 @@ export function UserEntry({ id, idx }: { id: string; idx: number }) {
         var rect = ref.current!.getBoundingClientRect();
         setUserPopup({
           id: user.id,
-          user: user,
           position: {
             x: rect.left - 16,
             y: rect.top,
           },
           direction: "left",
+        });
+      }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setContextMenuPopup({
+          type: "user",
+          id: user.id,
+          content: (
+            <UserContextMenu
+              id={user.id}
+              position={{ x: e.clientX, y: e.clientY }}
+              offset={{ x: 0, y: 0 }}
+            />
+          ),
         });
       }}
     >
@@ -455,6 +478,206 @@ function Users() {
         </div>
       ))}
     </div>
+  );
+}
+
+export function UserContextMenu({
+  id,
+  position,
+  offset,
+}: {
+  id: string;
+  position: { x: number; y: number };
+  offset: { x: number; y: number };
+}) {
+  const user = useClackState(ClackEvents.user(id), (state) =>
+    state.chat.users.get(id)
+  );
+  const setContextMenuPopup = getClackState(
+    (state) => state.gui.setContextMenuPopup
+  );
+  const setUserPopup = getClackState((state) => state.gui.setUserPopup);
+
+  const roles = useClackState(ClackEvents.roleList, (state) =>
+    state.chat.roles.getAll()
+  );
+
+  const [you, youPermissions] = useClackStateDynamic((state, events) => {
+    const currentUser = state.chat.currentUser;
+    if (!currentUser) {
+      return [undefined, 0] as const;
+    }
+    events.push(ClackEvents.user(currentUser));
+    events.push(ClackEvents.current);
+    const user = state.chat.users.get(currentUser);
+    const permissions = state.chat.getPermissions(currentUser, undefined);
+    return [user, permissions] as const;
+  });
+
+  const hasManageRoles = HasPermission(youPermissions, Permissions.ManageRoles);
+  const canManageRoles =
+    !!user && !!you && hasManageRoles && user.rank > you.rank;
+
+  let flipX = false;
+  let flipY = false;
+
+  if (position.x > window.innerWidth - 200) {
+    flipX = true;
+  }
+  if (position.y > window.innerHeight - 200) {
+    flipY = true;
+  }
+
+  const x = position.x;
+  const y = position.y;
+  const ox = offset.x;
+  const oy = offset.y;
+
+  const style: any = {
+    top: undefined,
+    left: undefined,
+    bottom: undefined,
+    right: undefined,
+  };
+
+  if (flipX) {
+    style.right = window.innerWidth - x + ox;
+  } else {
+    style.left = x + ox;
+  }
+
+  if (flipY) {
+    style.bottom = window.innerHeight - y + oy;
+  } else {
+    style.top = y + oy;
+  }
+
+  const youRank = you?.rank ?? Number.MAX_VALUE;
+
+  return (
+    <div className="context-menu" style={style}>
+      <div
+        className="context-menu-entry"
+        onClick={() => {
+          if (user) {
+            setUserPopup({
+              id: user.id,
+              position: { x: x + 12, y: y },
+              direction: flipX ? "left" : "right",
+            });
+          }
+          setContextMenuPopup(undefined);
+        }}
+      >
+        <div className="context-menu-label">Profile</div>
+      </div>
+      <div className="context-menu-divider" />
+      {canManageRoles && roles.length > 0 && (
+        <>
+          <div className="context-menu-entry">
+            <div className="context-menu-entry-wrapper">
+              <div className="context-menu-label">Roles</div>
+              <div className="context-menu-arrow">
+                <IoIosArrowForward />
+              </div>
+            </div>
+            <div
+              className={`context-menu context-menu-submenu${
+                flipX ? " flip-x" : ""
+              }`}
+              style={{ width: 216, gap: 2 }}
+            >
+              <div className={`context-menu-submenu-join-area`} />
+              <UserContextMenuRoles userID={user.id} />
+            </div>
+          </div>
+          <div className="context-menu-divider" />
+        </>
+      )}
+      <div
+        className="context-menu-entry"
+        onClick={() => {
+          navigator.clipboard.writeText(id);
+          setContextMenuPopup(undefined);
+        }}
+      >
+        <div className="context-menu-label">Copy ID</div>
+      </div>
+    </div>
+  );
+}
+
+export function UserContextMenuRoles({
+  userID,
+}: {
+  userID: string | undefined;
+}) {
+  const user = useClackState(ClackEvents.user(userID ?? ""), (state) =>
+    state.chat.users.get(userID ?? "")
+  );
+
+  const youRank = useClackState(ClackEvents.current, (state) => {
+    var you = state.chat.users.get(state.chat.currentUser);
+    return you?.rank ?? Number.MAX_VALUE;
+  });
+
+  const roles = useClackState(ClackEvents.roleList, (state) =>
+    state.chat.roles.getAll()
+  );
+
+  const addUserRole = getClackState((state) => state.chat.addUserRole);
+  const deleteUserRole = getClackState((state) => state.chat.deleteUserRole);
+
+  return (
+    <>
+      {roles.map((role) => {
+        const hasRole = user?.roles.includes(role.id) ?? false;
+        const canToggleRole = role.position > youRank;
+        const disabled = !canToggleRole;
+
+        return (
+          <div
+            key={role.id}
+            className="context-menu-entry"
+            style={
+              disabled
+                ? {
+                    opacity: 0.5,
+                    pointerEvents: "none",
+                  }
+                : undefined
+            }
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (!user || disabled) return;
+              if (hasRole) {
+                deleteUserRole(user.id, role.id);
+              } else {
+                addUserRole(user.id, role.id);
+              }
+            }}
+          >
+            <div
+              className="context-menu-role-color"
+              style={{
+                backgroundColor: FormatColor(role.color) ?? "var(--fg-color-3)",
+              }}
+            />
+            <div className="context-menu-label" style={{ flex: 1 }}>
+              {role.name}
+            </div>
+            <div
+              className={`context-menu-checkbox${hasRole ? " checked" : ""} ${
+                disabled ? "disabled" : ""
+              }`}
+            >
+              {hasRole && <IoMdCheckmark />}
+            </div>
+          </div>
+        );
+      })}
+    </>
   );
 }
 

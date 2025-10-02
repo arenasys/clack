@@ -52,6 +52,7 @@ import { FaFile, FaFileUpload, FaTimes } from "react-icons/fa";
 
 import Rand from "rand-seed";
 import { IconButton, TooltipWrapper } from "./Common";
+import { UserContextMenu } from "./Users";
 import { ContextMenuState } from "../state/gui";
 import { avatarPreviewURL } from "../state/chat";
 
@@ -148,12 +149,6 @@ export function Message({
   );
 
   const ownsContextMenu = actionBarContextMenu || mouseContextMenu;
-
-  function hasContextMenu() {
-    return getClackState((state) => {
-      return state.gui.contextMenuPopup !== undefined;
-    });
-  }
 
   function clearContextMenu() {
     setContextMenuPopup(undefined);
@@ -283,9 +278,6 @@ export function Message({
                 isPickingEmoji ? "active" : ""
               }`}
               onClick={(rect) => {
-                if (hasContextMenu()) {
-                  clearContextMenu();
-                }
                 setIsPickingEmoji(true);
                 setEmojiPickerPopup({
                   position: {
@@ -313,26 +305,22 @@ export function Message({
               actionBarContextMenu != undefined ? "active" : ""
             }`}
             onClick={(rect) => {
-              if (hasContextMenu()) {
-                clearContextMenu();
-              } else {
-                const contextMenu = {
-                  type: "message",
-                  id: id,
-                  content: (
-                    <MessageContextMenu
-                      id={id}
-                      position={{
-                        x: (rect.left + rect.right) / 2,
-                        y: (rect.top + rect.bottom) / 2,
-                      }}
-                      offset={{ x: 16 + 8, y: -16 }}
-                    />
-                  ),
-                };
-                setActionBarContextMenu(id);
-                setContextMenuPopup(contextMenu);
-              }
+              const contextMenu = {
+                type: "message",
+                id: id,
+                content: (
+                  <MessageContextMenu
+                    id={id}
+                    position={{
+                      x: (rect.left + rect.right) / 2,
+                      y: (rect.top + rect.bottom) / 2,
+                    }}
+                    offset={{ x: 16 + 8, y: -16 }}
+                  />
+                ),
+              };
+              setActionBarContextMenu(id);
+              setContextMenuPopup(contextMenu);
             }}
           >
             <RiMoreFill />
@@ -340,7 +328,7 @@ export function Message({
         </div>
       </div>
     );
-  }, [hasContextMenu, isEditing, isPickingEmoji]);
+  }, [actionBarContextMenu, isEditing, isPickingEmoji]);
 
   var header = useMemo(() => {
     const timestampEl = (
@@ -360,7 +348,6 @@ export function Message({
                 var rect = e.currentTarget.getBoundingClientRect();
                 setUserPopup({
                   id: message.author,
-                  user: message.user,
                   position: {
                     x: rect.right + 8,
                     y: rect.top,
@@ -370,6 +357,22 @@ export function Message({
                 e.preventDefault();
                 e.stopPropagation();
               }
+            }}
+            onContextMenu={(e) => {
+              if (!message.user) return;
+              e.preventDefault();
+              e.stopPropagation();
+              setContextMenuPopup({
+                type: "user",
+                id: message.user.id,
+                content: (
+                  <UserContextMenu
+                    id={message.user.id}
+                    position={{ x: e.clientX, y: e.clientY }}
+                    offset={{ x: 0, y: 0 }}
+                  />
+                ),
+              });
             }}
           />
           <div className="message-header">
@@ -383,7 +386,6 @@ export function Message({
                   var rect = e.currentTarget.getBoundingClientRect();
                   setUserPopup({
                     id: message.author,
-                    user: message.user,
                     position: {
                       x: rect.right + 8,
                       y: rect.top,
@@ -393,6 +395,22 @@ export function Message({
                   e.preventDefault();
                   e.stopPropagation();
                 }
+              }}
+              onContextMenu={(e) => {
+                if (!message.user) return;
+                e.preventDefault();
+                e.stopPropagation();
+                setContextMenuPopup({
+                  type: "user",
+                  id: message.user.id,
+                  content: (
+                    <UserContextMenu
+                      id={message.user.id}
+                      position={{ x: e.clientX, y: e.clientY }}
+                      offset={{ x: 0, y: 0 }}
+                    />
+                  ),
+                });
               }}
               onMouseDown={(e) => {
                 // Prevent text selection on double click
@@ -519,23 +537,19 @@ export function Message({
         e.preventDefault();
         e.stopPropagation();
 
-        if (hasContextMenu()) {
-          clearContextMenu();
-        } else {
-          const contextMenu = {
-            type: "message",
-            id: id,
-            content: (
-              <MessageContextMenu
-                id={id}
-                position={{ x: e.clientX, y: e.clientY }}
-                offset={{ x: 0, y: 0 }}
-              />
-            ),
-          };
-          setMouseContextMenu(id);
-          setContextMenuPopup(contextMenu);
-        }
+        const contextMenu = {
+          type: "message",
+          id: id,
+          content: (
+            <MessageContextMenu
+              id={id}
+              position={{ x: e.clientX, y: e.clientY }}
+              offset={{ x: 0, y: 0 }}
+            />
+          ),
+        };
+        setMouseContextMenu(id);
+        setContextMenuPopup(contextMenu);
       }}
     >
       <div className="message-background flash" data-on={isFlashing} />
@@ -597,7 +611,7 @@ export function Message({
             </div>
           )}
           {hasUploading && <MessageUpload id={id} />}
-          {hasReactions && <MessageReactions id={id} />}
+          {<MessageReactions id={id} />}
         </div>
       )}
     </div>
@@ -1164,6 +1178,9 @@ function MessageReference({ id }: { id: string }) {
   });
 
   const setUserPopup = getClackState((state) => state.gui.setUserPopup);
+  const setContextMenuPopup = getClackState(
+    (state) => state.gui.setContextMenuPopup
+  );
   const jumpToMessage = getClackState((state) => state.chat.jumpToMessage);
 
   const hasEmbeds = message?.embeds?.length > 0;
@@ -1193,12 +1210,26 @@ function MessageReference({ id }: { id: string }) {
                 var rect = e.currentTarget.getBoundingClientRect();
                 setUserPopup({
                   id: message.author,
-                  user: message.user,
                   position: {
                     x: rect.right + 8,
                     y: rect.top,
                   },
                   direction: "right",
+                });
+              }}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                if (!message.user) return;
+                setContextMenuPopup({
+                  type: "user",
+                  id: message.user.id,
+                  content: (
+                    <UserContextMenu
+                      id={message.user.id}
+                      position={{ x: e.clientX, y: e.clientY }}
+                      offset={{ x: 0, y: 0 }}
+                    />
+                  ),
                 });
               }}
             >
@@ -1482,10 +1513,8 @@ function MessageContextMenu({
               <IoIosArrowForward />
             </div>
           </div>
-
-          <div className={`context-menu-submenu-joiner`} />
-
           <div className={`context-menu context-menu-submenu`}>
+            <div className={`context-menu-submenu-join-area`} />
             {default_emojis.map((name) => {
               const emoji = EmojiLookupName(name);
 

@@ -303,3 +303,11 @@ export function NaturalList(items: string[], conjunction: string): string {
     items[items.length - 1]
   }`;
 }
+
+export function NeedsDarkForeground(color: number): boolean {
+  const r = (color >> 16) & 255,
+    g = (color >> 8) & 255,
+    b = color & 255;
+  const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+  return yiq >= 128;
+}
