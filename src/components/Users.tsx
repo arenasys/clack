@@ -6,7 +6,7 @@ import {
 } from "../state";
 import { FormatColor } from "../util";
 
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 
 import { User, UserPresence, Role, Permissions, HasPermission } from "../types";
 import { EmojiContent, SyntaxContent } from "../syntax";
@@ -63,6 +63,7 @@ const maskAvatarPresenceBig = (
   </>
 );
 
+const maskNone = <circle fill="white" cx="6" cy="6" r="3" />;
 const maskOnline = <circle cx="6" cy="6" r="6" fill="#fff" />;
 const maskOffline = (
   <>
@@ -76,7 +77,7 @@ const maskAway = (
     <circle fill="black" cx="3" cy="3" r="4.5"></circle>
   </>
 );
-const maskDontDisturb = (
+const maskDoNotDisturb = (
   <>
     <circle fill="white" cx="6" cy="6" r="6"></circle>
     <rect fill="black" x="1.5" y="4" width="9" height="4" rx="3" ry="3"></rect>
@@ -84,17 +85,19 @@ const maskDontDisturb = (
 );
 
 const presenceMasks = {
+  [UserPresence.None]: maskNone,
   [UserPresence.Online]: maskOnline,
   [UserPresence.Offline]: maskOffline,
   [UserPresence.Away]: maskAway,
-  [UserPresence.DontDisturb]: maskDontDisturb,
+  [UserPresence.DoNotDisturb]: maskDoNotDisturb,
 };
 
 const presenceNames = {
+  [UserPresence.None]: "none",
   [UserPresence.Online]: "online",
   [UserPresence.Offline]: "offline",
   [UserPresence.Away]: "away",
-  [UserPresence.DontDisturb]: "dont-disturb",
+  [UserPresence.DoNotDisturb]: "dont-disturb",
 };
 
 export function UserAvatarSVG({ user, size }: { user: User; size: number }) {
@@ -262,7 +265,12 @@ export function UserEntry({ id, idx }: { id: string; idx: number }) {
     };
     var width = rng(60, 140);
     return (
-      <div className="user-entry skeleton">
+      <div
+        className="user-entry user-list-entry skeleton"
+        style={{
+          top: idx * userEntryHeight,
+        }}
+      >
         <div className="user-avatar skeleton"></div>
         <div className="user-details">
           <div
@@ -278,9 +286,12 @@ export function UserEntry({ id, idx }: { id: string; idx: number }) {
     <div
       ref={ref}
       className={
-        "user-entry clickable-button" +
+        "user-entry user-list-entry clickable-button" +
         (user.presence == UserPresence.Offline ? " offline" : "")
       }
+      style={{
+        top: idx * userEntryHeight,
+      }}
       onClick={(e) => {
         var rect = ref.current!.getBoundingClientRect();
         setUserPopup({
@@ -328,7 +339,15 @@ export function UserEntry({ id, idx }: { id: string; idx: number }) {
   );
 }
 
-function UserGroup({ id, count }: { id: string; count: number }) {
+function UserGroup({
+  id,
+  count,
+  idx,
+}: {
+  id: string;
+  count: number;
+  idx: number;
+}) {
   const userGroup = useClackState(ClackEvents.role(id), (state) => {
     var name = "";
     if (id == String(UserPresence.Online)) {
@@ -346,7 +365,12 @@ function UserGroup({ id, count }: { id: string; count: number }) {
   });
 
   return (
-    <div className="user-group text-heading-small">
+    <div
+      className="user-group user-list-entry text-heading-small"
+      style={{
+        top: idx * userEntryHeight,
+      }}
+    >
       <span>{userGroup.name}</span>
       <span>{" — "}</span>
       <span>{userGroup.count}</span>
@@ -354,22 +378,24 @@ function UserGroup({ id, count }: { id: string; count: number }) {
   );
 }
 
-function Spacer({ count }: { count: number }) {
-  if (count <= 0) return null;
-
-  return (
-    <div
-      className="user-view-spacer"
-      style={{ height: count * userEntryHeight }}
-    ></div>
-  );
-}
-
 function Users() {
-  const userGroups = useClackState(
+  const userList = useClackState(
     ClackEvents.userList,
-    (state) => state.chat.userOrder.groups
+    (state) => state.chat.userList
   );
+
+  const groupsIDs = Array.from(userList.groups.keys());
+  var groupIndices: Map<string, number> = new Map();
+  var userListLength = 0;
+  userList.groups.forEach((count, id) => {
+    groupIndices.set(id, userListLength);
+    userListLength += count + 1;
+  });
+
+  const userIndices = Array.from(userList.list.keys()).filter((idx) => {
+    return !groupIndices.has(userList.list.get(idx)!);
+  });
+
   const setScroll = getClackState((state) => state.chat.setUserScroll);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -377,40 +403,15 @@ function Users() {
     ClackEvents.userList,
     (state) => state.gui.showingUserList
   );
-  const setShowing = getClackState((state) => state.gui.setShowingUserList);
 
   const scrollTimeout = useRef<number | null>(null);
 
-  function getIndex(height: number): [string, number] {
-    var group: string = "";
-    var index: number = 0;
+  function getIndex(height: number): number {
+    return Math.floor(height / userEntryHeight);
+  }
 
-    var i = 0;
-
-    for (const g of userGroups) {
-      i += userGroupHeight;
-
-      var userHeight = g.count * userEntryHeight;
-
-      if (i + userHeight > height) {
-        group = g.role;
-        index = Math.max(
-          0,
-          Math.min(g.count - 1, Math.floor((height - i) / userEntryHeight))
-        );
-        break;
-      }
-
-      i += userHeight;
-    }
-
-    if (group == "") {
-      var lastGroup = userGroups[userGroups.length - 1];
-      group = lastGroup.role;
-      index = lastGroup.count - 1;
-    }
-
-    return [group, index];
+  function getHeight(index: number): number {
+    return index * userEntryHeight;
   }
 
   function doScroll() {
@@ -422,14 +423,14 @@ function Users() {
       listRef.current.clientHeight
     );
 
-    var [topGroup, topIndex] = getIndex(
+    var top = getIndex(
       listRef.current.scrollTop - listRef.current.clientHeight
     );
-    var [bottomGroup, bottomIndex] = getIndex(
+    var bottom = getIndex(
       listRef.current.scrollTop + 2 * listRef.current.clientHeight
     );
 
-    setScroll(topGroup, topIndex, bottomGroup, bottomIndex);
+    setScroll(top, bottom);
   }
 
   function onScroll() {
@@ -441,6 +442,10 @@ function Users() {
       doScroll();
     }, 100);
   }
+
+  useEffect(() => {
+    doScroll();
+  }, []);
 
   if (!showing) {
     return null;
@@ -460,23 +465,21 @@ function Users() {
         }
       }}
     >
-      {userGroups.map((g, gidx) => (
-        <div key={g.role} className="user-view-group">
-          <UserGroup key={g.role} id={g.role} count={g.count} />
-          <Spacer key={g.role + "-pre"} count={g.start} />
-          {g.users.map((id, uidx) => (
-            <UserEntry
-              key={g.role + id}
-              id={id}
-              idx={gidx * (1 << 16) + (g.start + uidx)}
-            />
-          ))}
-          <Spacer
-            key={g.role + "-post"}
-            count={g.count - (g.start + g.users.length)}
+      <div style={{ position: "relative", height: getHeight(userListLength) }}>
+        {groupsIDs.map((id) => (
+          <UserGroup
+            key={`g-${id}`}
+            id={id}
+            count={userList.groups.get(id)!}
+            idx={groupIndices.get(id)!}
           />
-        </div>
-      ))}
+        ))}
+
+        {userIndices.map((idx) => {
+          var id = userList.list.get(idx)!;
+          return <UserEntry key={`u-${id}`} id={id} idx={idx} />;
+        })}
+      </div>
     </div>
   );
 }

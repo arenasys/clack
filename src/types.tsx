@@ -24,10 +24,11 @@ export interface Message {
 }
 
 export const enum UserPresence {
-  Offline = 0,
-  Online = 1,
-  Away = 2,
-  DontDisturb = 3,
+  None = 0,
+  Offline = 1,
+  Online = 2,
+  Away = 3,
+  DoNotDisturb = 4,
 }
 
 export const DefaultUserColor = 0xff0000;
@@ -379,24 +380,19 @@ export interface MessagesResponse {
 }
 
 export interface UserListRequest {
-  startGroup: string;
-  startIndex: number;
-  endGroup: string;
-  endIndex: number;
+  start: number;
+  end: number;
 }
 
 export interface UserListGroup {
   id: Snowflake;
   count: number;
-  start: number;
-  users: Snowflake[];
 }
 
 export interface UserListResponse {
-  startGroup: string;
-  startIndex: number;
-  endGroup: string;
-  endIndex: number;
+  start: number;
+  end: number;
+  slice: Snowflake[];
   groups: UserListGroup[];
 }
 

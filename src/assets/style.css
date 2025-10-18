@@ -2091,6 +2091,13 @@ pre code {
   overflow-y: scroll !important;
 }
 
+.user-list-entry {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 45px;
+}
+
 .user-group {
   padding: 24px 8px 0 16px;
   color: var(--fg-color-2);
@@ -2124,6 +2131,10 @@ pre code {
   height: 32px;
   flex: 0 0 32px;
   margin-right: 12px;
+}
+
+.user-avatar-svg .none {
+  fill: #a123a5;
 }
 
 .user-avatar-svg .online {

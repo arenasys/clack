@@ -103,7 +103,7 @@ export default function YouPopup() {
                           <div className="context-menu-entry">
                             <div className="context-menu-icon">
                               <UserPresenceIcon
-                                presence={UserPresence.DontDisturb}
+                                presence={UserPresence.DoNotDisturb}
                                 className="you-controls-presence-menu-icon"
                               />
                             </div>

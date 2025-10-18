@@ -100,14 +100,6 @@ export interface ChatChannelGroup {
   category?: Snowflake;
   channels: Snowflake[];
 }
-
-export interface ChatUserGroup {
-  role: Snowflake;
-  count: number;
-  start: number;
-  users: Snowflake[];
-}
-
 export interface ChatPendingAttachment {
   id: Snowflake;
   file: File;
@@ -312,79 +304,35 @@ export class ChatChannelState {
   constructor() {}
 }
 
-export class ChatUserOrder {
-  groups: ChatUserGroup[] = [];
+export class ChatUserList {
+  list: Map<number, Snowflake> = new Map(); // index => userID
+  groups: Map<Snowflake, number> = new Map(); // groupID => count
   fetching: boolean = false;
 
   setRequest(req: UserListRequest) {
     this.fetching = true;
 
-    var inRange = false;
+    const start = Math.max(0, req.start | 0);
+    const end = Math.max(start, req.end | 0);
+    if (end <= start) return;
 
-    for (var i = 0; i < this.groups.length; i++) {
-      var group = this.groups[i];
-
-      var startIndex = 0;
-      var endIndex = group.count - 1;
-
-      if (group.role === req.startGroup) {
-        inRange = true;
-        startIndex = req.startIndex;
-      }
-
-      if (group.role === req.endGroup) {
-        endIndex = req.endIndex;
-      }
-
-      if (inRange) {
-        var startOverlap =
-          startIndex >= group.start &&
-          startIndex < group.start + group.users.length;
-        var endOverlap =
-          endIndex >= group.start &&
-          endIndex < group.start + group.users.length;
-
-        if (startOverlap && endOverlap) {
-          // Do nothing
-        } else if (startOverlap) {
-          startIndex = group.start + group.users.length;
-          for (var j = startIndex; j <= endIndex; j++) {
-            var key = i * (1 << 16) + j;
-            group.users.push(`skeleton-${key}`);
-          }
-        } else if (endOverlap) {
-          endIndex = group.start - 1;
-          for (var j = startIndex; j <= endIndex; j++) {
-            var key = i * (1 << 16) + j;
-            group.users.unshift(`skeleton-${key}`);
-          }
-          group.start = startIndex;
-        } else {
-          group.users = [];
-          for (var j = startIndex; j <= endIndex; j++) {
-            var key = i * (1 << 16) + j;
-            group.users.push(`skeleton-${key}`);
-          }
-          group.start = startIndex;
-        }
-      }
-
-      if (group.role === req.endGroup) {
-        inRange = false;
+    for (let i = start; i < end; i++) {
+      if (!this.list.has(i)) {
+        this.list.set(i, `skeleton-${i}`);
       }
     }
-
-    this.groups = [...this.groups];
   }
 
   setResponse(msg: UserListResponse) {
     this.fetching = false;
-    this.groups = msg.groups.map((group) => ({
-      role: group.id,
-      count: group.count,
-      start: group.start,
-      users: group.users,
-    }));
+    this.list = new Map();
+    msg.slice.forEach((id, index) => {
+      this.list.set(msg.start + index, id);
+    });
+    this.groups = new Map();
+    msg.groups.forEach((group) => {
+      this.groups.set(group.id, group.count);
+    });
   }
   constructor() {}
 }
@@ -534,7 +482,7 @@ export class ChatState {
   messages: Map<Snowflake, Message> = new Map();
 
   channelGroups: ChatChannelGroup[] = [];
-  userOrder: ChatUserOrder = new ChatUserOrder();
+  userList: ChatUserList = new ChatUserList();
   channelStates: Map<Snowflake, ChatChannelState> = new Map();
   reactionUsers: Map<Snowflake, ChatReactionUserStore> = new Map();
 
@@ -887,20 +835,13 @@ export class ChatState {
     this.syncCurrent(state);
   };
 
-  setUserScroll = (
-    topGroup: Snowflake,
-    topIndex: number,
-    bottomGroup: Snowflake,
-    bottomIndex: number
-  ) => {
-    if (this.userOrder.fetching) return;
+  setUserScroll = (start: number, end: number) => {
+    if (this.userList.fetching) return;
     const req: UserListRequest = {
-      startGroup: topGroup,
-      startIndex: topIndex,
-      endGroup: bottomGroup,
-      endIndex: bottomIndex,
+      start: start,
+      end: end,
     };
-    this.userOrder.setRequest(req);
+    this.userList.setRequest(req);
     this.pushRequest({ type: EventType.UserListRequest, data: req });
   };
 
@@ -1475,12 +1416,15 @@ export class ChatState {
   };
 
   onUsers = (msg: UsersResponse) => {
-    this.processUsers(msg.users);
+    this.processUsers(msg.users || []);
   };
 
   onUserList = (msg: UserListResponse) => {
-    this.userOrder.setResponse(msg);
-    msg.groups.forEach((g) => this.fetchUnknownUsers(g.users));
+    console.log("ON USER LIST", msg.slice.length, msg.groups.length);
+    this.userList.setResponse(msg);
+    this.fetchUnknownUsers(
+      msg.slice.filter((u) => !msg.groups.some((g) => g.id == u))
+    );
     updateClackState(ClackEvents.userList);
   };
 
@@ -1584,7 +1528,7 @@ export class ChatState {
   };
 
   onResponse = (msg: any) => {
-    console.log("RESPONSE", msg.type);
+    console.log("RESPONSE", msg);
 
     if (msg.type === EventType.SettingsResponse) this.onSettings(msg.data);
     else if (msg.type === EventType.TokenResponse) this.onToken(msg.data);
