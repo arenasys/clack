@@ -185,7 +185,7 @@ export default function SettingsScreen() {
             </div>
           </div>
           <div className="settings-content-container">
-            <div className="settings-content">
+            <div className="settings-content settings-content-margin">
               {SettingsTab.Profile === settingsTab && <ProfileTab></ProfileTab>}
               {SettingsTab.MyAccount === settingsTab && (
                 <MyAccountTab></MyAccountTab>
@@ -433,6 +433,8 @@ function MyAccountTab() {
           </div>
         </div>
       </div>
+
+      <div className="settings-seperator" />
 
       <div className="settings-heading">Passwords and Authentication</div>
       <SettingsSection>

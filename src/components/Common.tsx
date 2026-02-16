@@ -91,8 +91,9 @@ export function IconButton({
       onMouseLeave={() => {
         setIsHovered(false);
       }}
-      onClick={() => {
+      onClick={(e) => {
         var rect = ref.current!.getBoundingClientRect();
+        e.stopPropagation();
         if (onClick) onClick(rect);
       }}
     >
@@ -203,7 +204,7 @@ export function ClickWrapper({
 
     function isWhitelisted(target: Element | null) {
       if (!target) return false;
-      console.log(target, target.closest(WHITELIST_SELECTORS));
+      //console.log(target, target.closest(WHITELIST_SELECTORS));
       return Boolean(target.closest(WHITELIST_SELECTORS));
     }
 

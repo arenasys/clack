@@ -12,7 +12,9 @@ export function Client() {
     (state) => state.chat.requests
   );
 
-  const uri = `ws://${window.location.host}/gateway`;
+
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const uri = `${protocol}//${window.location.host}/gateway`;
   const token = localStorage.getItem("token");
   const opts = token ? { protocols: [token] } : {};
 

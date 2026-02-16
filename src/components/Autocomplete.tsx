@@ -299,8 +299,6 @@ export const Autocomplete = forwardRef(function Autocomplete(
     roleResults.length > 0 ||
     channelResults.length > 0;
 
-  const memberLabel = userResults.length > 0 ? "Users" : "Roles";
-
   if (anyResults) {
     return (
       <div ref={scrollRef} className="autocomplete thin-scrollbar">
@@ -330,7 +328,11 @@ export const Autocomplete = forwardRef(function Autocomplete(
         })}
 
         {(userResults.length > 0 || roleResults.length > 0) && (
-          <AutocompleteCategory text={`${memberLabel} matching ${word}`} />
+          <AutocompleteCategory
+            text={`${
+              userResults.length > 0 ? "Users" : "Roles"
+            } matching ${word}`}
+          />
         )}
         {userResults.map((result, i) => {
           return (

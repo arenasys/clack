@@ -117,10 +117,8 @@ export enum SettingsTab {
 }
 
 export enum DashboardTab {
-  Overview = "overview",
-  Members = "members",
+  Users = "users",
   Roles = "roles",
-  Channels = "channels",
 }
 
 export class GUIState {

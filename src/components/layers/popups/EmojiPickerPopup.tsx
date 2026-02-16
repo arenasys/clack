@@ -613,6 +613,13 @@ function EmojiPickerSearch({
           const query = e.target.value;
           pickerState.setSearch(query);
         }}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            e.preventDefault();
+            e.stopPropagation();
+            pickerState.setSearch("");
+          }
+        }}
       />
       <BiSearch />
     </div>

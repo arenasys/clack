@@ -47,7 +47,7 @@ function ServerContextMenu() {
       <div
         className="context-menu-entry"
         onClick={() => {
-          setDashboardTab(DashboardTab.Overview);
+          setDashboardTab(DashboardTab.Users);
           setContextMenu(undefined);
         }}
       >
