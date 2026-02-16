@@ -63,27 +63,26 @@ import {
 
 import { MakeSnowflake, GetFileType } from "../util";
 
+const baseURL = `${window.location.protocol}//${window.location.host}`;
 const previewURL = (message_id: Snowflake, id: Snowflake) =>
-  `http://${window.location.host}/previews/${message_id}/${id}?type=thumbnail`;
+  `${baseURL}/previews/${message_id}/${id}?type=thumbnail`;
 const displayURL = (message_id: Snowflake, id: Snowflake) =>
-  `http://${window.location.host}/previews/${message_id}/${id}?type=display`;
+  `${baseURL}/previews/${message_id}/${id}?type=display`;
 const originalURL = (message_id: Snowflake, id: Snowflake, filename: string) =>
-  `http://${window.location.host}/attachments/${message_id}/${id}/${filename}`;
+  `${baseURL}/attachments/${message_id}/${id}/${filename}`;
 const proxyURL = (message_id: Snowflake, id: Snowflake, url: string) =>
-  `http://${
-    window.location.host
-  }/external/${message_id}/${id}?url=${encodeURIComponent(url)}`;
+  `${baseURL}/external/${message_id}/${id}?url=${encodeURIComponent(url)}`;
 const uploadURL = (slot: Snowflake) =>
-  `http://${window.location.host}/upload/${slot}`;
+  `${baseURL}/upload/${slot}`;
 
 export const avatarPreviewURL = (user: User) => {
   if (user.avatarURL) {
     return user.avatarURL;
   }
   if (user.avatarModified == 0) {
-    return `http://${window.location.host}/avatar.png`;
+    return `${baseURL}/avatar.png`;
   }
-  return `http://${window.location.host}/avatars/${user.id}/${user.avatarModified}?type=thumbnail`;
+  return `${baseURL}/avatars/${user.id}/${user.avatarModified}?type=thumbnail`;
 };
 
 export const avatarDisplayURL = (user: User) => {
@@ -91,9 +90,9 @@ export const avatarDisplayURL = (user: User) => {
     return user.avatarURL;
   }
   if (user.avatarModified == 0) {
-    return `http://${window.location.host}/avatar.png`;
+    return `${baseURL}/avatar.png`;
   }
-  return `http://${window.location.host}/avatars/${user.id}/${user.avatarModified}?type=display`;
+  return `${baseURL}/avatars/${user.id}/${user.avatarModified}?type=display`;
 };
 
 export interface ChatChannelGroup {

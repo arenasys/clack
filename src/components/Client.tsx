@@ -13,7 +13,7 @@ export function Client() {
   );
 
 
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const protocol = window.location.protocol.replace("http", "ws");
   const uri = `${protocol}//${window.location.host}/gateway`;
   const token = localStorage.getItem("token");
   const opts = token ? { protocols: [token] } : {};
