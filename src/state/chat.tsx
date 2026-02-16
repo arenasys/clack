@@ -835,6 +835,7 @@ export class ChatState {
   };
 
   setUserScroll = (start: number, end: number) => {
+    if (this.authState !== ChatAuthState.Connected) return;
     if (this.userList.fetching) return;
     const req: UserListRequest = {
       start: start,
