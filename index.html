@@ -50,13 +50,5 @@
       src="https://unpkg.com/react-scan/dist/auto.global.js"
     ></script>-->
     <script id="main-module" type="module" src="/src/main.tsx"></script>
-
-    <script>
-      document.getElementById("main-module").addEventListener("load", (e) => {
-        setTimeout(() => {
-          document.getElementById("root-spinner").remove();
-        }, 100);
-      });
-    </script>
   </body>
 </html>
