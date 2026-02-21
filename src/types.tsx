@@ -229,6 +229,18 @@ export const enum Permissions {
   All = 0x7fffffff,
 }
 
+export const ModeratorPermissions: number = 
+    Permissions.Administrator |
+    Permissions.InviteMembers |
+    Permissions.SilenceMembers |
+    Permissions.KickMembers |
+    Permissions.BanMembers |
+    Permissions.ManageProfiles |
+    Permissions.ManageMessages |
+    Permissions.ManageChannels |
+    Permissions.ManageRoles |
+    Permissions.ManageEmojis;
+
 export function HasPermission(
   permissions: number,
   permission: Permissions
@@ -237,6 +249,10 @@ export function HasPermission(
     Permissions.Administrator || (permissions & permission) === permission
     ? true
     : false;
+}
+
+export function IsModerator(permissions: number): boolean {
+  return (permissions & ModeratorPermissions) != 0;
 }
 
 export const enum EventType {

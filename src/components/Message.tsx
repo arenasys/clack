@@ -581,9 +581,7 @@ export function Message({
                       attachmentCount={attachedMedia.length}
                       key={`${id}-attachment-${index}`}
                       attachment={attachment}
-                      onView={() => {
-                        doView(index);
-                      }}
+                      doView={doView}
                     />
                   ))}
                 </div>
@@ -1006,12 +1004,12 @@ function MessageMediaAttachment({
   attachmentIndex,
   attachmentCount,
   attachment,
-  onView,
+  doView,
 }: {
   attachmentIndex: number;
   attachmentCount: number;
   attachment: Attachment;
-  onView: () => void;
+  doView: (index) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -1019,6 +1017,10 @@ function MessageMediaAttachment({
   const loadTimeout = useRef<number | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  function tryView() {
+    doView(attachmentIndex);
+  }
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -1062,7 +1064,7 @@ function MessageMediaAttachment({
           src={attachment.displayURL!}
           preview={attachment.previewURL!}
           preload={attachment.preload}
-          onClick={onView}
+          onClick={tryView}
         />
       );
     } else {
@@ -1070,7 +1072,7 @@ function MessageMediaAttachment({
         <ImageDisplay
           src={attachment.previewURL!}
           preload={attachment.preload}
-          onClick={onView}
+          onClick={tryView}
         />
       );
     }
@@ -1086,7 +1088,7 @@ function MessageMediaAttachment({
         isThumbnail={thumbnail}
         onClick={() => {
           if (thumbnail) {
-            onView();
+            tryView();
             return false;
           } else {
             return true;
@@ -1131,6 +1133,7 @@ function MessageFileAttachment({ attachment }: { attachment: Attachment }) {
         </div>
       </div>
       <a
+        download
         href={attachment.originalURL}
         rel="noreferrer noopener"
         target="_blank"
@@ -1305,8 +1308,6 @@ function MessageReaction({
     tooltipTimeout.current = window.setTimeout(() => {
       if (ref.current == null) return;
       const rect = ref.current.getBoundingClientRect();
-
-      console.log("Showing tooltip for reaction", id, react.emoji);
       setReactionTooltipPopup({
         message: id,
         emoji: react.emoji,

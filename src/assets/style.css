@@ -1558,6 +1558,30 @@ pre code {
   box-sizing: content-box;
 }
 
+.video-download-icon {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  padding: 3px;
+  border-radius: 4px;
+  background-color: black;
+  transition: opacity 0.25s, color 0.25s;
+  opacity: 0.0;
+  box-sizing: content-box;
+  color: var(--overlay-color);
+  height: 20px;
+  width: 20px;
+}
+
+.video-download-icon svg {
+  height: 100%;
+  width: 100%;
+}
+
+.video-container:hover .video-download-icon {
+  opacity: 0.6;
+}
+
 .media-error {
   position: absolute;
   top: 0;

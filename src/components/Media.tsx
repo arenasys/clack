@@ -6,9 +6,10 @@ import {
   PiArrowCounterClockwiseBold,
   PiCornersOutBold,
   PiCornersInBold,
+  PiDownloadSimpleBold
 } from "react-icons/pi";
-import { MdVolumeUp, MdVolumeDown, MdVolumeOff } from "react-icons/md";
-
+import { MdFileDownload, MdVolumeUp, MdVolumeDown, MdVolumeOff } from "react-icons/md";
+import { IoMdDownload } from "react-icons/io";
 import { useClackState, getClackState, ClackEvents } from "../state";
 
 import { Viewable } from "../types";
@@ -544,7 +545,7 @@ export function VideoDisplay({
         doOnKeyDown(e.nativeEvent);
       }}
     >
-      {!isLoaded && !isFullscreen && <img src={preload} />}
+      {!isLoaded && !isFullscreen && !isErrored && <img src={preload} />}
       {(isLoaded || !isErrored) && !isFullscreen && (
         <img
           src={poster}
@@ -649,6 +650,16 @@ export function VideoDisplay({
                 }}
               >
                 {!isShowing && <PiPlayFill className="video-cover-icon play" />}
+                {/*<a
+                  download
+                  href={src}
+                  rel="noreferrer noopener"
+                  target="_blank"
+                  className="video-download-icon"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                  }}
+                ><IoMdDownload/></a>*/}
                 {isShowing && isPlaying && isWaiting && loader}
               </div>
 
@@ -707,7 +718,7 @@ export function ImageDisplay({
             setIsErrored(true);
           }}
           style={{
-            display: loaded ? "block" : "none",
+            display: loaded && !isErrored ? "block" : "none",
           }}
         />
       }
@@ -778,7 +789,7 @@ export function AnimatedImageDisplay({
             setIsErrored(true);
           }}
           style={{
-            display: animatedLoaded ? "block" : "none",
+            display: (animatedLoaded && !isErrored) ? "block" : "none",
           }}
         />
       }

@@ -32,9 +32,10 @@ import { RiArrowDownSLine } from "react-icons/ri";
 import { MdSpaceDashboard } from "react-icons/md";
 import { ErrorBoundary } from "react-error-boundary";
 import { Fallback, FallbackLayer } from "./Error";
-import { ClackEvents, useClackState, getClackState } from "../state";
+import { ClackEvents, useClackState, getClackState, useClackStateDynamic } from "../state";
 import AvatarModal from "./layers/modals/AvatarModal";
 import { DashboardTab } from "../state/gui";
+import { IsModerator } from "../types";
 
 function ServerContextMenu() {
   const setContextMenu = getClackState(
@@ -73,11 +74,7 @@ function ServerContextMenu() {
   );
 }
 
-function App() {
-  const key = useClackState(ClackEvents.reset, (state) => {
-    return state.key;
-  });
-
+function ServerHeader() {
   const setContextMenu = getClackState(
     (state) => state.gui.setContextMenuPopup
   );
@@ -90,6 +87,41 @@ function App() {
 
   const setTooltipPopup = getClackState((state) => state.gui.setTooltipPopup);
 
+  const currentPermissions = useClackStateDynamic((state, events) => {
+    events.push(ClackEvents.current);
+    events.push(ClackEvents.user(state.chat.currentUser));
+    return state.chat.getPermissions(state.chat.currentUser, undefined);
+  });
+
+  return (<>
+    <h2 className="server-name">Clack</h2>
+    {IsModerator(currentPermissions) && (
+    <IconButton
+      className={`server-dropdown-button  ${
+        isServerContextMenu ? "hover" : "foreground"
+      }`}
+      tooltip="Server options"
+      tooltipDirection="bottom"
+      onClick={() => {
+        setTooltipPopup(null);
+        setContextMenu({
+          type: serverContextMenu,
+          id: serverContextMenu,
+          content: <ServerContextMenu />,
+        });
+      }}
+    >
+      <RiArrowDownSLine className="icon" />
+    </IconButton>
+    )}
+  </>);
+}
+
+function App() {
+  const key = useClackState(ClackEvents.reset, (state) => {
+    return state.key;
+  });
+
   return (
     <div id="root" key={key}>
       <Client />
@@ -98,24 +130,7 @@ function App() {
       <div id="main-container">
         <div id="header-container">
           <div id="left-header-container">
-            <h2 className="server-name">Clack</h2>
-            <IconButton
-              className={`server-dropdown-button  ${
-                isServerContextMenu ? "hover" : "foreground"
-              }`}
-              tooltip="Server options"
-              tooltipDirection="bottom"
-              onClick={() => {
-                setTooltipPopup(null);
-                setContextMenu({
-                  type: serverContextMenu,
-                  id: serverContextMenu,
-                  content: <ServerContextMenu />,
-                });
-              }}
-            >
-              <RiArrowDownSLine className="icon" />
-            </IconButton>
+              <ServerHeader/>
           </div>
           <div id="center-header-container">
             <ErrorBoundary FallbackComponent={Fallback}>

@@ -69,7 +69,7 @@ const previewURL = (message_id: Snowflake, id: Snowflake) =>
 const displayURL = (message_id: Snowflake, id: Snowflake) =>
   `${baseURL}/previews/${message_id}/${id}?type=display`;
 const originalURL = (message_id: Snowflake, id: Snowflake, filename: string) =>
-  `${baseURL}/attachments/${message_id}/${id}/${filename}`;
+  `${baseURL}/attachments/${message_id}/${id}/${encodeURIComponent(filename)}`;
 const proxyURL = (message_id: Snowflake, id: Snowflake, url: string) =>
   `${baseURL}/external/${message_id}/${id}?url=${encodeURIComponent(url)}`;
 const uploadURL = (slot: Snowflake) =>
@@ -1352,9 +1352,13 @@ export class ChatState {
         count: 1,
         me: isMe,
       };
+      const isFirstReact = message.reactions == undefined;
       if (!message.reactions) message.reactions = [];
       message.reactions.push(react);
       updateClackState(ClackEvents.reactions(msg.message));
+      if (isFirstReact) {
+        updateClackState(ClackEvents.message(msg.message));
+      }
     } else {
       if (react.me && isMe) {
         return;
@@ -1400,6 +1404,21 @@ export class ChatState {
       if (index !== -1) message.reactions!.splice(index, 1);
     }
     updateClackState(ClackEvents.reactions(msg.message));
+
+    if (message.reactions!.length === 0) {
+      message.reactions = undefined;
+      updateClackState(ClackEvents.message(msg.message));
+    }
+
+    getClackState((state) => {
+      if(
+        react.count == 0 &&
+        state.gui.reactionTooltipPopup?.message === msg.message &&
+        state.gui.reactionTooltipPopup?.emoji === msg.emoji
+      ) {
+        state.gui.setReactionTooltipPopup(undefined);
+      }
+    });
   };
 
   onReactionUsers = (msg: ReactionUsersResponse) => {
