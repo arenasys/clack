@@ -907,11 +907,7 @@ export const MarkdownTextbox = forwardRef(function MarkdownTextbox(
               }
             }
           }}
-          scrollSelectionIntoView={(editor, domRange) => {
-            if (autoscroll) {
-              scrollSelectionIntoView(editor);
-            }
-          }}
+
         />
       </Slate>
     </div>

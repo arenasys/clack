@@ -789,7 +789,7 @@ export class ChatState {
     return this.channelStates.get(this.currentChannel)!.anchor;
   };
 
-  jumpToMessage = (message: Snowflake | string | undefined) => {
+  jumpToMessage = (message: Snowflake | string | undefined, silent: boolean = false) => {
     if (!this.currentChannel) return;
     const state = this.channelStates.get(this.currentChannel);
     if (!state) return;
@@ -814,7 +814,9 @@ export class ChatState {
 
     state.setAnchor(message, true);
 
-    state.jumpedTo = message;
+    if (!silent) {
+      state.jumpedTo = message;
+    }
     if (!state.messages.includes(message)) {
       state.messages = [];
       if (this.messages.has(message as Snowflake))

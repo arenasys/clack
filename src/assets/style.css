@@ -2464,6 +2464,7 @@ button {
 }
 
 .leaf-code {
+  font-weight: 400;
   background: var(--bg-color-1);
   font-family: var(--monospace-font);
   font-size: 14px;
@@ -2480,6 +2481,7 @@ button {
 }
 
 .leaf-codeblock {
+  font-weight: 400;
   color: var(--fg-color-2);
   font-family: var(--monospace-font);
   font-size: 14px;

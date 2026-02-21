@@ -129,6 +129,14 @@ export function Message({
     editedValue.current = undefined;
   }, [message?.editedTimestamp]);
 
+  useEffect(() => {
+    if(isEditing) {
+      jumpToMessage(message.id, true);
+      
+      requestAnimationFrame(()=>jumpToMessage(message.id, true));
+    }
+  }, [isEditing])
+
   const setViewerModal = getClackState((state) => state.gui.setViewerModal);
   const setUserPopup = getClackState((state) => state.gui.setUserPopup);
   const setContextMenuPopup = getClackState(
@@ -264,6 +272,7 @@ export function Message({
               tooltipDirection="top"
               className={`message-actions-button row`}
               onClick={() => {
+                jumpToMessage(message.id, true);
                 setIsEditing(true);
               }}
             >
